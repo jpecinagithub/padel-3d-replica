@@ -44,7 +44,7 @@ export function Menu({ state, onNavigate, onToggleMuted }: MenuProps) {
       <h1 className="game-title">
         Pádel <span className="accent">3D</span>
       </h1>
-      <p className="replica-subtitle">Réplica clean-room · Fase 6</p>
+      <p className="replica-subtitle">Réplica clean-room · v1.0.0</p>
       <p className="tagline">Cristal, pala y gradas llenas. Tu club, tus reglas.</p>
 
       <div className="chip-row" aria-label="Configuración actual">

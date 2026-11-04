@@ -1,6 +1,46 @@
 # e2e — verificación visual (Playwright)
 
-La suite E2E formal de la SPEC §7.3 llega en la Fase 7. Desde la Fase 2 se
+## Regresión completa (Fase 7): `full-regression.mjs`
+
+Desde la Fase 7 la batería clave de todo el juego vive en un único
+script consolidado, relanzable:
+
+```bash
+node e2e/full-regression.mjs
+```
+
+- Arranca su propio `vite preview` (127.0.0.1:4173, necesita el
+  `dist/` construido: `npm run build` antes) y lo cierra al terminar.
+- Una sola pasada, dos contextos: **escritorio** (1280×800) —
+  menú/escena, audio perezoso, tienda sin monedas, personalizar,
+  entrenamiento con saque de aguja válido, partido con la IA
+  devolviendo ≥2 bolas, repetición con V, efectos `__padelWin`, set
+  guiado completo 6-0 con economía exacta (672 🪙 a nivel Medio),
+  persistencia tras recarga, compra y equipamiento en la tienda con
+  las monedas ganadas, Torneo (run guardado, Semifinal 4-0, +528 🪙,
+  avance a la Final) y mute persistido con contadores congelados — y
+  **móvil emulado** (390×844, hasTouch): controles táctiles visibles,
+  HUD compacto de la Fase 7 (sin solapes con la franja inferior),
+  joystick con toques reales vía CDP, saque por toques y pausa
+  táctil. Cero errores de consola exigidos en ambas sesiones.
+- Imprime `PASS`/`FAIL` por check con su detalle y un resumen final;
+  termina con código 1 si algo falla (2 si la batería ni arranca).
+- Los partidos se guían con los hooks de test del juego
+  (`__padelTestWinPoint` y compañía), que puntúan **por la vía
+  normal** (Score → economía → persistencia): con SwiftShader un set
+  jugado a mano duraría horas. Los contadores de audio son disparos
+  lógicos (FASE6 §1.3): verifican el cableado, no la escucha.
+- Playwright no es dependencia del proyecto: el script lo busca en
+  el propio proyecto y en los proyectos vecinos de la VM (o en
+  `$PLAYWRIGHT_FROM`), y usa el Chromium completo de la caché
+  (`chrome-linux64`, o `$CHROMIUM_EXE`).
+- Capturas de la batería en `e2e/screenshots/`
+  (`fase7-hud-movil-despues.png`; la comparación del pulido con
+  `fase7-hud-movil-antes.png`). Resultados en `FASE7_INFORME.md`.
+
+## Verificaciones por fase (Fases 2-6)
+
+Desde la Fase 2 se
 verifica la escena con un script de Playwright contra `vite preview` en
 localhost (sin pasar por el proxy de la VM), apoyado en los hooks de test:
 

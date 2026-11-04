@@ -816,3 +816,227 @@ body {
   height: 48px;
   font-size: 1.05rem;
 }
+
+/* ---- Fase 7: HUD compacto en pantallas estrechas (≤760 px) ----
+   Solo presentación: el HUD de escritorio queda intacto y en móvil
+   se reduce a lo esencial durante el juego. Los chips informativos
+   secundarios (.hud-chip-opt: saque, estado de la IA, fase, cámara y
+   sonido) se ocultan porque esa información ya está en el marcador
+   (la 🎾 marca quién saca) y en la columna táctil de utilidades
+   (📷/🔊). La etiqueta larga y la ayuda de teclado de la franja
+   inferior se ocultan: en táctil no aplican y su hueco lo ocupan el
+   joystick y GOLPE, que bajan de bottom:118px a bottom:92px. */
+
+@media (max-width: 760px) {
+  .court-hud {
+    padding: 10px;
+  }
+
+  .hud-row {
+    gap: 8px;
+  }
+
+  .hud-chips {
+    gap: 6px;
+  }
+
+  .hud-chip {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
+
+  .hud-chip-opt {
+    display: none;
+  }
+
+  /* Marcador oficial reducido pero legible. */
+  .scoreboard {
+    gap: 6px;
+    margin-top: 6px;
+    max-width: 98vw;
+  }
+
+  .score-side {
+    gap: 7px;
+    padding: 4px 10px;
+    border-radius: 10px;
+  }
+
+  .score-name {
+    font-size: 0.72rem;
+  }
+
+  .score-games {
+    font-size: 1.3rem;
+  }
+
+  .score-points {
+    font-size: 1rem;
+  }
+
+  .score-ball {
+    font-size: 0.85rem;
+  }
+
+  .score-set,
+  .score-badge {
+    font-size: 0.68rem;
+    padding: 3px 8px;
+  }
+
+  .mode-selector {
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .mode-selector .btn-small {
+    padding: 6px 10px;
+    font-size: 0.82rem;
+  }
+
+  /* Mensajes centrales y aguja: compactos, sin invadir laterales. */
+  .hud-center {
+    gap: 10px;
+  }
+
+  .hud-message {
+    font-size: 1rem;
+    padding: 8px 16px;
+    border-radius: 10px;
+    max-width: 94vw;
+    text-align: center;
+  }
+
+  .replay-badge {
+    font-size: 0.78rem;
+    padding: 5px 12px;
+  }
+
+  .needle-gauge {
+    width: 92vw;
+  }
+
+  .needle-track {
+    height: 20px;
+  }
+
+  .needle-caption {
+    font-size: 0.8rem;
+    padding: 3px 10px;
+  }
+
+  .rally-summary {
+    padding: 10px 14px;
+    max-width: 94vw;
+  }
+
+  .rally-summary p {
+    font-size: 0.9rem;
+  }
+
+  .rally-cause {
+    font-size: 1rem;
+  }
+
+  .rally-next {
+    font-size: 0.8rem;
+  }
+
+  /* Franja inferior: solo medidores, en una línea compacta. */
+  .hud-bottom {
+    gap: 4px;
+  }
+
+  .hud-label,
+  .hud-help,
+  .hud-bottom .hud-btn {
+    display: none;
+  }
+
+  .hud-meters {
+    gap: 6px;
+  }
+
+  .hud-meters .hud-chip {
+    padding: 4px 9px;
+    font-size: 0.78rem;
+  }
+
+  .meter {
+    padding: 4px 9px;
+    gap: 6px;
+  }
+
+  .meter-label {
+    font-size: 0.66rem;
+  }
+
+  .meter-track {
+    width: 84px;
+    height: 8px;
+  }
+
+  .meter-value {
+    font-size: 0.72rem;
+    min-width: 28px;
+  }
+
+  /* Controles táctiles: misma disposición, un poco más recogidos. */
+  .touch-joystick {
+    left: 12px;
+    bottom: 92px;
+    width: 112px;
+    height: 112px;
+  }
+
+  .touch-knob {
+    width: 48px;
+    height: 48px;
+    margin: -24px 0 0 -24px;
+  }
+
+  .touch-actions {
+    right: 12px;
+    bottom: 92px;
+    gap: 10px;
+  }
+
+  .touch-actions-row {
+    gap: 10px;
+  }
+
+  .touch-btn-hit {
+    width: 84px;
+    height: 84px;
+    font-size: 0.95rem;
+  }
+
+  .touch-btn-small {
+    width: 60px;
+    height: 60px;
+    font-size: 0.6rem;
+  }
+
+  .touch-utils {
+    right: 10px;
+    top: 118px;
+    gap: 8px;
+  }
+
+  .touch-util {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+
+  /* Paneles de pausa/fin: que quepan en la pantalla estrecha. */
+  .pause-panel {
+    padding: 18px 16px;
+    min-width: 0;
+    width: min(92vw, 430px);
+  }
+
+  .end-breakdown p {
+    gap: 12px;
+  }
+}

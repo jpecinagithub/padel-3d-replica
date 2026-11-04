@@ -96,7 +96,7 @@ export function Menu({ state, onNavigate, onToggleMuted }: MenuProps) {
         </p>
       </div>
 
-      <p className="replica-subtitle">Réplica clean-room · v1.1.2</p>
+      <p className="replica-subtitle">Réplica clean-room · v1.2.0</p>
     </section>
   );
 }

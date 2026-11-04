@@ -41,6 +41,9 @@ export interface SceneProbe {
   adBoards: number;
   objects: number;
   meshes: number;
+  /** Fase 10 (instrumentación de solo lectura): coste del último frame. */
+  drawCalls: number;
+  triangles: number;
   rendererSize: [number, number];
   pixelRatio: number;
   effects: EffectsProbe;
@@ -84,8 +87,47 @@ export class PadelScene {
     onStartMatch: () => undefined,
   };
   private playMode: PlayMode = 'none';
-  /** Contador para renderizar a media tasa en modo menú (C4). */
-  private menuFrameSkip = 0;
+  // ---- Fase 10: gobernador adaptativo de calidad ----
+  // El delta real entre ticks ≈ coste del frame en renderizadores
+  // lentos (rAF espera al pintado). Si el frame sale caro de forma
+  // sostenida, se baja el pixelRatio por una escalera; si sobra
+  // máquina, se vuelve a subir. En hardware capaz el coste es de
+  // ~8-16 ms y el gobernador no toca nada.
+  private static readonly RATIO_LADDER = [2, 1.6, 1.3, 1.1, 0.9, 0.75, 0.62, 0.5];
+  private frameCostEma = 16;
+  private lastTickMs = 0;
+  private lastRenderMs = 0;
+  private governorTicks = 0;
+  private ratioIndex = 0;
+  /** Tope de pixelRatio según el modo (menú 1, pista 2, por DPR). */
+  private capRatio = 1;
+
+  /** Aplica el pixelRatio efectivo: min(tope del modo, escalón actual). */
+  private applyRatio(): void {
+    const ladder = PadelScene.RATIO_LADDER;
+    const step = ladder[Math.min(this.ratioIndex, ladder.length - 1)] ?? 1;
+    this.renderer.setPixelRatio(Math.min(this.capRatio, step));
+    this.resize();
+  }
+
+  /** Evalúa el coste reciente y mueve el escalón si procede. */
+  private governQuality(nowMs: number): void {
+    if (this.lastTickMs > 0) {
+      const delta = Math.min(nowMs - this.lastTickMs, 5000);
+      this.frameCostEma = this.frameCostEma * 0.7 + delta * 0.3;
+    }
+    this.lastTickMs = nowMs;
+    this.governorTicks += 1;
+    if (this.governorTicks < 10) return;
+    this.governorTicks = 0;
+    if (this.frameCostEma > 34 && this.ratioIndex < PadelScene.RATIO_LADDER.length - 1) {
+      this.ratioIndex += 1;
+      this.applyRatio();
+    } else if (this.frameCostEma < 15 && this.ratioIndex > 0) {
+      this.ratioIndex -= 1;
+      this.applyRatio();
+    }
+  }
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -94,8 +136,10 @@ export class PadelScene {
     // tests visuales pueden muestrear los píxeles del canvas en cualquier
     // momento (SPEC §7.3), no solo justo tras un frame.
     // La escena nace en modo menú (sin juego): pixelRatio con tope 1
-    // (C4); al entrar en pista, setPlayMode lo sube a 2.
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1));
+    // (C4); al entrar en pista, setPlayMode lo sube a 2. El gobernador
+    // adaptativo (Fase 10) parte del escalón más alto permitido.
+    this.capRatio = Math.min(window.devicePixelRatio || 1, 1);
+    this.renderer.setPixelRatio(this.capRatio);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -123,6 +167,8 @@ export class PadelScene {
       onEffect: (kind: 'win' | 'gold', at?: { x: number; y: number; z: number }) => this.handleEffect(kind, at),
       onMatchEnd: (summary: MatchSummary) => this.handlers.onMatchEnd(summary),
       onRequestNewMatch: () => this.handlers.onStartMatch(),
+      // Fase 10: reacción visual de la grada al cerrar cada punto.
+      onPointEnd: (big: boolean) => this.court.crowdCheer(big),
       onSound: (event: SoundEvent) => {
         this.audio.dispatch(event);
       },
@@ -155,6 +201,7 @@ export class PadelScene {
       this.appliedAmbience = settings.ambience;
       const preset = ambiencePreset(settings.ambience);
       this.backdrop.applyPreset(preset, this.scene);
+      this.court.setFloodCones(preset.floodCones);
       this.renderer.toneMappingExposure = preset.exposure;
     }
     if (settings.crowd !== this.appliedCrowd) {
@@ -226,10 +273,12 @@ export class PadelScene {
     // Fase 8 · C4: sin modo de juego (menú/tienda/personalizar) la
     // escena es un fondo decorativo — se limita el coste sin perderlo:
     // pixelRatio con tope 1 y render a media tasa en update(). Al
-    // entrar en pista se restaura la calidad completa.
+    // entrar en pista se restaura la calidad completa. Fase 10: el
+    // tope pasa por el gobernador adaptativo (escalón reiniciado).
     const dpr = window.devicePixelRatio || 1;
-    this.renderer.setPixelRatio(mode === 'none' ? Math.min(dpr, 1) : Math.min(dpr, 2));
-    this.resize();
+    this.capRatio = Math.min(dpr, mode === 'none' ? 1 : 2);
+    this.ratioIndex = 0;
+    this.applyRatio();
     this.refreshCrowd();
   }
 
@@ -357,6 +406,11 @@ export class PadelScene {
     else this.training.togglePause();
   }
 
+  /** Botón 🎥 del HUD (Fase 10): repetición del último punto (como V). */
+  playReplayToggle(): void {
+    if (this.playMode === 'match') this.match.toggleReplayKey();
+  }
+
   setCameraKind(kind: CameraKind): void {
     this.rig.setKind(kind);
   }
@@ -383,9 +437,13 @@ export class PadelScene {
 
   /** Un frame: avanza el modo activo, mueve la cámara y renderiza. */
   update(dt: number): void {
+    const nowMs = performance.now();
+    this.governQuality(nowMs);
     this.training.update(dt);
     this.match.update(dt);
     this.effects.update(dt);
+    // Fase 10: animación de la grada (reacción a los puntos).
+    this.court.update(dt);
     const focus =
       this.playMode === 'match' ? this.match.focusData() : this.training.focusData();
     this.rig.setFocus(focus);
@@ -396,12 +454,16 @@ export class PadelScene {
     this.rig.update(dt);
     // C4: en el menú (sin modo activo) basta media tasa de render: el
     // fondo sigue animado (modos inactivos y cámara se actualizan
-    // igual) pero se dibuja un frame de cada dos.
-    if (this.playMode === 'none') {
-      this.menuFrameSkip = (this.menuFrameSkip + 1) % 2;
-      if (this.menuFrameSkip === 1) return;
+    // igual) pero se dibuja un frame de cada dos. Fase 10: si el
+    // frame sale caro, el intervalo entre pintados crece en
+    // proporción (respiro real para dispositivos lentos); con frames
+    // rápidos el comportamiento es el de siempre (≥33 ms).
+    if (this.playMode === 'none' && this.frames > 0) {
+      const interval = Math.max(33, this.frameCostEma * 2.2);
+      if (nowMs - this.lastRenderMs < interval) return;
     }
     this.renderer.render(this.scene, this.rig.camera);
+    this.lastRenderMs = nowMs;
     this.frames += 1;
   }
 
@@ -428,6 +490,8 @@ export class PadelScene {
       adBoards: this.court.adBoards,
       objects,
       meshes,
+      drawCalls: this.renderer.info.render.calls,
+      triangles: this.renderer.info.render.triangles,
       rendererSize: [size.x, size.y],
       pixelRatio: this.renderer.getPixelRatio(),
       effects: this.effects.probe(),

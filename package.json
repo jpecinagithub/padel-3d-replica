@@ -4,7 +4,7 @@
     "react-dom": "19.3.1",
     "three": "^0.180.0"
   },
-  "description": "Réplica clean-room de «Pádel 3D» — v1.1.2: juego completo (fases 0-7) + correcciones de la revisión Codex (Fase 8 y Ronda 2) + portada recomposada (Fase 9)",
+  "description": "Réplica clean-room de «Pádel 3D» — v1.2.0: juego completo (fases 0-7) + correcciones de la revisión Codex (Fase 8 y Ronda 2) + portada recomposada (Fase 9) + HUD de centro libre y estadio realista (Fase 10)",
   "devDependencies": {
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -29,5 +29,5 @@
     "test:watch": "vitest"
   },
   "type": "module",
-  "version": "1.1.2"
+  "version": "1.2.0"
 }

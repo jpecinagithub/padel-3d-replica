@@ -24,6 +24,10 @@ export interface PlayerColors {
   skin: string;
   cap: string;
   pants: string;
+  /** Fase 10 (detalle visual): color del pelo bajo la gorra. */
+  hair?: string;
+  /** Fase 10 (detalle visual): color de las zapatillas. */
+  shoes?: string;
 }
 
 export const DEFAULT_PLAYER_COLORS: PlayerColors = {
@@ -86,6 +90,8 @@ export class PlayerFigure {
     cap: THREE.MeshStandardMaterial;
     pants: THREE.MeshStandardMaterial;
     racket: THREE.MeshStandardMaterial;
+    hair: THREE.MeshStandardMaterial;
+    shoes: THREE.MeshStandardMaterial;
   };
   private readonly p: Pivots;
   private yaw = 0;
@@ -105,9 +111,11 @@ export class PlayerFigure {
       cap: new THREE.MeshStandardMaterial({ color: merged.cap, roughness: 0.8 }),
       pants: new THREE.MeshStandardMaterial({ color: merged.pants, roughness: 0.9 }),
       racket: new THREE.MeshStandardMaterial({ color: colors.racket ?? '#2b2f36', roughness: 0.5, metalness: 0.3 }),
+      hair: new THREE.MeshStandardMaterial({ color: merged.hair ?? '#2b2118', roughness: 0.95 }),
+      shoes: new THREE.MeshStandardMaterial({ color: merged.shoes ?? '#e8e8e8', roughness: 0.6 }),
     };
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: 0.6 });
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.6 });
+    const sockMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.85 });
 
     const mesh = (
       parent: THREE.Object3D,
@@ -143,7 +151,9 @@ export class PlayerFigure {
       mesh(leg, new THREE.CapsuleGeometry(0.082, 0.3, 4, 10), this.mats.skin, 0, -0.22, 0);
       const shin = pivot(leg, 0, -0.44, 0);
       mesh(shin, new THREE.CapsuleGeometry(0.062, 0.3, 4, 10), this.mats.skin, 0, -0.2, 0);
-      mesh(shin, new THREE.BoxGeometry(0.11, 0.07, 0.27), shoeMat, 0, -0.42, 0.05);
+      // Calcetín sobre el tobillo y zapatilla del color del jugador.
+      mesh(shin, new THREE.CylinderGeometry(0.066, 0.07, 0.09, 10), sockMat, 0, -0.36, 0);
+      mesh(shin, new THREE.BoxGeometry(0.11, 0.07, 0.27), this.mats.shoes, 0, -0.42, 0.05);
       return { leg, shin };
     };
     const legL = buildLeg(-0.14);
@@ -152,10 +162,15 @@ export class PlayerFigure {
     // ---- Tronco (camiseta) ----
     const torso = pivot(pelvis, 0, 0.1, 0);
     mesh(torso, new THREE.CapsuleGeometry(0.175, 0.4, 4, 12), this.mats.torso, 0, 0.28, 0);
+    // Franja pectoral del color de la gorra (detalle de kit, Fase 10).
+    mesh(torso, new THREE.CylinderGeometry(0.182, 0.182, 0.06, 14), this.mats.cap, 0, 0.4, 0);
 
     // ---- Cabeza con gorra (el grupo permite asentir/negar) ----
     const head = pivot(torso, 0, 0.62, 0);
     mesh(head, new THREE.SphereGeometry(0.132, 14, 10), this.mats.skin, 0, 0.1, 0);
+    // Pelo: casquete ligeramente mayor, retrasado, bajo la gorra.
+    const hair = mesh(head, new THREE.SphereGeometry(0.137, 14, 10), this.mats.hair, 0, 0.125, -0.02);
+    hair.scale.set(1, 0.86, 1);
     mesh(head, new THREE.CylinderGeometry(0.142, 0.148, 0.07, 12), this.mats.cap, 0, 0.21, 0);
     const brim = mesh(head, new THREE.BoxGeometry(0.2, 0.03, 0.15), this.mats.cap, 0, 0.18, 0.15);
     brim.castShadow = false;
@@ -181,6 +196,16 @@ export class PlayerFigure {
         disc.position.set(0, 0.02, 0.24);
         disc.castShadow = true;
         racket.add(disc);
+        // Fase 10: aro perimetral oscuro y núcleo de la cara, para que
+        // la pala se lea como pala de pádel y no como un disco plano.
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.163, 0.013, 8, 24), darkMat);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.set(0, 0.02, 0.24);
+        rim.castShadow = true;
+        racket.add(rim);
+        const core = new THREE.Mesh(new THREE.CircleGeometry(0.115, 20), darkMat);
+        core.position.set(0, 0.02, 0.259);
+        racket.add(core);
         fore.add(racket);
       }
       return { arm, fore };
@@ -244,6 +269,8 @@ export class PlayerFigure {
     if (colors.cap) this.mats.cap.color.set(colors.cap);
     if (colors.pants) this.mats.pants.color.set(colors.pants);
     if (colors.racket) this.mats.racket.color.set(colors.racket);
+    if (colors.hair) this.mats.hair.color.set(colors.hair);
+    if (colors.shoes) this.mats.shoes.color.set(colors.shoes);
   }
 
   /** Orienta la figura hacia un punto (suavizado en update). */

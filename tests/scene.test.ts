@@ -75,7 +75,9 @@ describe('constantes de la pista', () => {
   });
 
   it('el público instanciado es una cantidad fija y documentada', () => {
-    expect(CROWD_TOTAL).toBe(306);
+    // Fase 10: plan determinista de 4 gradas × 10 filas con pasillos
+    // y huecos (courtConstants.CROWD_PLAN): 1.754 figuras.
+    expect(CROWD_TOTAL).toBe(1754);
   });
 });
 

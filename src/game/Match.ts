@@ -155,6 +155,12 @@ export interface MatchContext {
   onSound: (event: SoundEvent) => void;
   /** Probe del motor de audio para __padelProbe. */
   getAudioProbe: () => AudioProbe;
+  /**
+   * Fin de cada punto (Fase 10): aviso de SOLO presentación — la
+   * escena anima la grada. No altera marcador, tiempos ni economía.
+   * `big` = punto que cierra juego/partido o punto de oro.
+   */
+  onPointEnd?: (big: boolean) => void;
 }
 
 interface Actor {
@@ -172,8 +178,8 @@ interface Actor {
 const TRAIL_POINTS = 26;
 const MIN_SERVE_CONTACT_Y = 1.6;
 
-const RIVAL_COLORS = { shirt: '#e23b3b', pants: '#1c1c22', skin: '#b57a4e', cap: '#1c1c22', racket: '#3a3f47' };
-const RIVAL2_COLORS = { shirt: '#8e2323', pants: '#23232b', skin: '#8a5a34', cap: '#e23b3b', racket: '#3a3f47' };
+const RIVAL_COLORS = { shirt: '#e23b3b', pants: '#1c1c22', skin: '#b57a4e', cap: '#1c1c22', racket: '#3a3f47', hair: '#17110c', shoes: '#d84040' };
+const RIVAL2_COLORS = { shirt: '#8e2323', pants: '#23232b', skin: '#8a5a34', cap: '#e23b3b', racket: '#3a3f47', hair: '#3a2415', shoes: '#2e6fc2' };
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -211,6 +217,8 @@ export class Match {
   private readonly trail: THREE.Line;
   private readonly trailPositions: Float32Array;
   private readonly blob: THREE.Mesh;
+  /** Anillo-objetivo del saque (Fase 10): marcador de suelo, sin lógica. */
+  private readonly serveRing: THREE.Mesh;
   private readonly canvasEl: HTMLElement;
 
   private readonly human: Actor;
@@ -289,7 +297,7 @@ export class Match {
       return { role, team, sideSign, figure, brain: null, cooldown: 0, lastAttemptBall: -1, speedRatio: 0 };
     };
     this.human = mkActor('human', 'human', -1, {});
-    this.partner = mkActor('partner', 'human', -1, { shirt: '#22b8cf', pants: '#2c3e57', skin: '#c98d54', cap: '#ffffff', racket: '#2b2f36' });
+    this.partner = mkActor('partner', 'human', -1, { shirt: '#22b8cf', pants: '#2c3e57', skin: '#c98d54', cap: '#ffffff', racket: '#2b2f36', hair: '#4a2e17', shoes: '#ffd23c' });
     this.rival = mkActor('rival', 'ai', 1, RIVAL_COLORS);
     this.rival2 = mkActor('rival2', 'ai', 1, RIVAL2_COLORS);
     this.actors = [this.human, this.partner, this.rival, this.rival2];
@@ -305,6 +313,19 @@ export class Match {
     this.blob.rotation.x = -Math.PI / 2;
     this.blob.position.y = 0.012;
     this.group.add(this.blob);
+    // Anillo-objetivo del saque (Fase 10): anillo lima sobre el centro
+    // del cuadro de saque diagonal — el objetivo nominal de un saque
+    // perfecto (serveVelocity con aguja centrada). Es un marcador del
+    // mundo, como en el modelo: NO sigue a la aguja (no filtra su
+    // información si «Ayudas» está apagado) y no toca la mecánica.
+    this.serveRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.3, 0.42, 40),
+      new THREE.MeshBasicMaterial({ color: 0xc6e265, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    this.serveRing.rotation.x = -Math.PI / 2;
+    this.serveRing.position.y = 0.02;
+    this.serveRing.visible = false;
+    this.group.add(this.serveRing);
     this.trailPositions = new Float32Array(TRAIL_POINTS * 3);
     const trailGeo = new THREE.BufferGeometry();
     trailGeo.setAttribute('position', new THREE.BufferAttribute(this.trailPositions, 3));
@@ -508,6 +529,9 @@ export class Match {
     this.serverRole = this.roleForPlayer(snap.server);
     const pointsPlayed = (snap.points[0] as number) + (snap.points[1] as number);
     this.serveSide = pointsPlayed % 2 === 0 ? 1 : -1;
+    // Anillo-objetivo (Fase 10): centro del cuadro diagonal de este punto.
+    const ringTarget = serveVelocity(0.5, this.serveSide).target;
+    this.serveRing.position.set(ringTarget.x, 0.02, ringTarget.z);
     this.recorder.clear();
     const server = this.actorByRole(this.serverRole);
     const serverPos = this.servePosFor(server, this.serveSide);
@@ -796,6 +820,8 @@ export class Match {
       const games = this.flow.score.snapshot.games;
       this.message = `${cause} · Juego ${winnerTeam === 'human' ? 'tuyo' : 'del rival'} (${games[0]}–${games[1]})`;
     }
+    // Fase 10: la grada reacciona al punto (solo presentación).
+    this.ctx.onPointEnd?.(wasGoldPoint || award.result.gameWon || award.result.matchWon);
   }
 
   /** Tras un punto: o se prepara el siguiente saque o se cierra el partido (devuelve true si se cerró). */
@@ -1150,6 +1176,17 @@ export class Match {
     arr[(TRAIL_POINTS - 1) * 3 + 2] = p.z;
     (this.trail.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     this.trail.visible = this.ball.state === 'flying';
+    // Anillo-objetivo del saque: visible solo mientras saca el humano
+    // (ready/toss), con un pulso suave. Presentación pura.
+    const ringOn =
+      this.serverRole === 'human' && (this.phase === 'serve-ready' || this.phase === 'serve-toss');
+    this.serveRing.visible = ringOn;
+    if (ringOn) {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.005);
+      (this.serveRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.35 * pulse;
+      const s = 1 + 0.07 * pulse;
+      this.serveRing.scale.set(s, s, 1);
+    }
   }
 
   focusData(): { player: THREE.Vector3; ball: THREE.Vector3 } | null {
@@ -1395,6 +1432,20 @@ export class Match {
     return this.probe();
   }
 
+  /**
+   * Equivalente a la tecla V para el botón 🎥 del HUD (Fase 10): con
+   * la repetición en curso la cierra; si el punto terminó, la abre.
+   * Misma semántica que el consumo de KeyV en update(), sin tocarla.
+   */
+  toggleReplayKey(): void {
+    if (!this.active || this.paused) return;
+    if (this.replayPlayer.active) {
+      this.finishReplay();
+      return;
+    }
+    if (this.phase === 'ended' || this.phase === 'match-over') this.startReplay();
+  }
+
   /** Hook de test: lanza una bola clara al campo de la IA (para que devuelva). */
   testLaunchAtAI(): MatchProbe {
     if (!this.active) this.setActive(true);
@@ -1423,6 +1474,8 @@ export class Match {
     (this.trail.material as THREE.Material).dispose();
     this.blob.geometry.dispose();
     (this.blob.material as THREE.Material).dispose();
+    this.serveRing.geometry.dispose();
+    (this.serveRing.material as THREE.Material).dispose();
     this.group.removeFromParent();
   }
 }

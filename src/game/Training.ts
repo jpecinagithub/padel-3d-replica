@@ -69,6 +69,8 @@ export interface TrainingContext {
   onSound: (event: SoundEvent) => void;
   /** Probe del motor de audio para __padelProbe. */
   getAudioProbe: () => AudioProbe;
+  /** Fin de cada rally (Fase 10): aviso de SOLO presentación (grada). */
+  onPointEnd?: (big: boolean) => void;
 }
 
 const TRAIL_POINTS = 26;
@@ -86,6 +88,8 @@ export class Training {
   private readonly trail: THREE.Line;
   private readonly trailPositions: Float32Array;
   private readonly blob: THREE.Mesh;
+  /** Anillo-objetivo del saque (Fase 10): marcador de suelo, sin lógica. */
+  private readonly serveRing: THREE.Mesh;
   private active = false;
   private paused = false;
   private phase: TrainingPhase = 'serve-ready';
@@ -136,6 +140,20 @@ export class Training {
     this.blob.rotation.x = -Math.PI / 2;
     this.blob.position.y = 0.012;
     this.group.add(this.blob);
+
+    // Anillo-objetivo del saque (Fase 10): anillo lima sobre el centro
+    // del cuadro de saque diagonal — el objetivo nominal de un saque
+    // perfecto (serveVelocity con aguja centrada). Es un marcador del
+    // mundo, como en el modelo: NO sigue a la aguja (no filtra su
+    // información si «Ayudas» está apagado) y no toca la mecánica.
+    this.serveRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.3, 0.42, 40),
+      new THREE.MeshBasicMaterial({ color: 0xc6e265, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    this.serveRing.rotation.x = -Math.PI / 2;
+    this.serveRing.position.y = 0.02;
+    this.serveRing.visible = false;
+    this.group.add(this.serveRing);
 
     this.trailPositions = new Float32Array(TRAIL_POINTS * 3);
     const trailGeo = new THREE.BufferGeometry();
@@ -226,6 +244,9 @@ export class Training {
 
   private setupServe(alternate: boolean): void {
     if (alternate) this.serveSide = (this.serveSide === 1 ? -1 : 1) as 1 | -1;
+    // Anillo-objetivo (Fase 10): centro del cuadro diagonal de este saque.
+    const ringTarget = serveVelocity(0.5, this.serveSide).target;
+    this.serveRing.position.set(ringTarget.x, 0.02, ringTarget.z);
     const pos = servePlayerPos(this.serveSide);
     this.playerFigure.setPosition(pos.x, pos.z);
     this.playerFigure.faceNet();
@@ -332,6 +353,8 @@ export class Training {
     this.lastCause = cause;
     this.message = cause;
     this.serveInFlight = false;
+    // Fase 10: la grada reacciona al punto (solo presentación).
+    this.ctx.onPointEnd?.(false);
   }
 
   private handleEvent(event: BallEvent): void {
@@ -529,6 +552,15 @@ export class Training {
     arr[(TRAIL_POINTS - 1) * 3 + 2] = p.z;
     (this.trail.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     this.trail.visible = this.ball.state === 'flying';
+    // Anillo-objetivo del saque: visible en ready/toss, con pulso suave.
+    const ringOn = this.phase === 'serve-ready' || this.phase === 'serve-toss';
+    this.serveRing.visible = ringOn;
+    if (ringOn) {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.005);
+      (this.serveRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.35 * pulse;
+      const s = 1 + 0.07 * pulse;
+      this.serveRing.scale.set(s, s, 1);
+    }
   }
 
   /** Datos para que la cámara TV/Jugador siga a jugador y bola. */
@@ -646,6 +678,8 @@ export class Training {
     (this.trail.material as THREE.Material).dispose();
     this.blob.geometry.dispose();
     (this.blob.material as THREE.Material).dispose();
+    this.serveRing.geometry.dispose();
+    (this.serveRing.material as THREE.Material).dispose();
     this.group.removeFromParent();
   }
 }

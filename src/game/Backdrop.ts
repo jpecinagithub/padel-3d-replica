@@ -3,7 +3,9 @@
 // montañas y suelo exterior. Todo procedural, sin assets externos.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { AmbiencePreset } from './ambiencePresets';
+import { makeBuildingTextures, makeVenueTexture } from './textures';
 
 export interface Backdrop {
   group: THREE.Group;
@@ -73,11 +75,13 @@ export function buildBackdrop(): Backdrop {
   group.add(sky);
 
   // ---- Suelo exterior ----
-  const groundMat = track(new THREE.MeshStandardMaterial({ color: 0x0b1220, roughness: 1 }));
+  // Basic a propósito: el disco queda siempre fuera de la cámara de
+  // sombras (±18 m), así que no pierde nada y ahorra el sombreado
+  // completo por fragmento en la zona más amplia de la pantalla.
+  const groundMat = track(new THREE.MeshBasicMaterial({ color: 0x0b1220 }));
   const ground = new THREE.Mesh(track(new THREE.CircleGeometry(230, 40)), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.06;
-  ground.receiveShadow = true;
   group.add(ground);
 
   // ---- Estrellas (solo de noche; se generan 900 y se muestran u ocultan) ----
@@ -131,6 +135,119 @@ export function buildBackdrop(): Backdrop {
   }
   group.add(mountainGroup);
 
+  // ---- Suelo del recinto (Fase 10): losa de asfalto pintado que
+  // cierra visualmente el estadio entre el apron y el skyline. ----
+  const venueMat = track(new THREE.MeshLambertMaterial({ map: track(makeVenueTexture()) }));
+  const venue = new THREE.Mesh(track(new THREE.PlaneGeometry(46, 56)), venueMat);
+  venue.rotation.x = -Math.PI / 2;
+  venue.position.y = -0.048;
+  venue.receiveShadow = true;
+  group.add(venue);
+
+  // ---- Skyline (Fase 10): anillo de edificios con ventanas
+  // iluminadas (textura procedural propia, dos tonos). La intensidad
+  // emisiva la manda el preset: fuerte de noche, casi nula de día. ----
+  const buildingMats: THREE.MeshLambertMaterial[] = [];
+  {
+    const styles = [makeBuildingTextures('warm'), makeBuildingTextures('cool')];
+    for (const s of styles) {
+      track(s.map);
+      track(s.emissiveMap);
+      buildingMats.push(
+        track(
+          new THREE.MeshLambertMaterial({
+            map: s.map,
+            emissiveMap: s.emissiveMap,
+            emissive: 0xffffff,
+            emissiveIntensity: 1.35,
+          }),
+        ),
+      );
+    }
+    for (let b = 0; b < 14; b++) {
+      const angle = (b / 14) * Math.PI * 2 + (rand() - 0.5) * 0.3;
+      const radius = 36 + rand() * 16;
+      const w = 8 + rand() * 6;
+      const h = 16 + rand() * 28;
+      const d = 8 + rand() * 6;
+      const building = new THREE.Mesh(
+        track(new THREE.BoxGeometry(w, h, d)),
+        buildingMats[b % 2] as THREE.MeshLambertMaterial,
+      );
+      building.position.set(Math.cos(angle) * radius, h / 2 - 0.06, Math.sin(angle) * radius);
+      building.rotation.y = -angle;
+      group.add(building);
+    }
+  }
+
+  // ---- Palmeras low-poly propias (Fase 10): tronco de segmentos y
+  // corona de frondas curvadas, fusionadas en una sola geometría con
+  // colores por vértice por palmera. ----
+  const palmMat = track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }));
+  const paintGeo = (geo: THREE.BufferGeometry, hex: string): THREE.BufferGeometry => {
+    const c = new THREE.Color(hex);
+    const n = geo.attributes.position?.count ?? 0;
+    const arr = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      arr[i * 3] = c.r;
+      arr[i * 3 + 1] = c.g;
+      arr[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    return geo;
+  };
+  const buildPalm = (): THREE.BufferGeometry => {
+    const parts: THREE.BufferGeometry[] = [];
+    let x = 0;
+    let y = 0;
+    const lean = (rand() - 0.5) * 0.22;
+    for (let s = 0; s < 4; s++) {
+      const seg = new THREE.CylinderGeometry(0.09 - 0.012 * s, 0.115 - 0.012 * s, 0.85, 6);
+      seg.translate(x, y + 0.42, 0);
+      x += lean * 0.85;
+      y += 0.8;
+      parts.push(paintGeo(seg, '#6b4a2f'));
+    }
+    const greens = ['#2e7d43', '#35924e', '#27703b', '#3fa055'];
+    for (let f = 0; f < 7; f++) {
+      const frond = new THREE.PlaneGeometry(0.34, 1.7, 1, 4);
+      frond.translate(0, 0.85, 0);
+      const pos = frond.attributes.position as THREE.BufferAttribute;
+      for (let v = 0; v < pos.count; v++) {
+        const t = (pos.getY(v) as number) / 1.7;
+        pos.setZ(v, -0.5 * t * t);
+      }
+      frond.computeVertexNormals();
+      const yaw = (f / 7) * Math.PI * 2 + rand() * 0.5;
+      const m = new THREE.Matrix4()
+        .makeRotationY(yaw)
+        .multiply(new THREE.Matrix4().makeRotationX(1.05 + rand() * 0.25));
+      frond.applyMatrix4(m);
+      frond.translate(x, y + 0.15, 0);
+      parts.push(paintGeo(frond, greens[f % greens.length] as string));
+    }
+    const merged = mergeGeometries(parts);
+    if (!merged) throw new Error('No se pudo fusionar la palmera');
+    return merged;
+  };
+  const palmSpots: [number, number][] = [
+    [14.5, 20],
+    [-14.5, 20],
+    [14.5, -20],
+    [-14.5, -20],
+    [22, 4],
+    [-22, -4],
+    [0, 26.5],
+  ];
+  for (const [px, pz] of palmSpots) {
+    const palm = new THREE.Mesh(track(buildPalm()), palmMat);
+    palm.position.set(px, -0.05, pz);
+    palm.rotation.y = rand() * Math.PI * 2;
+    const s = 0.9 + rand() * 0.35;
+    palm.scale.set(s, s * (0.95 + rand() * 0.2), s);
+    group.add(palm);
+  }
+
   // ---- Luces ----
   const hemi = new THREE.HemisphereLight(0x8fb4ff, 0x1a2438, 0.55);
   group.add(hemi);
@@ -176,6 +293,8 @@ export function buildBackdrop(): Backdrop {
       cloudMat.opacity = preset.cloudOpacity;
       mountainMat.color.set(preset.mountainColor);
       groundMat.color.set(preset.groundColor);
+      // Fase 10: ventanas del skyline según el ambiente.
+      for (const m of buildingMats) m.emissiveIntensity = preset.buildingGlow;
     },
     dispose() {
       for (const item of disposables) item.dispose();

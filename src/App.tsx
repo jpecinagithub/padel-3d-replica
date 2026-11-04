@@ -142,6 +142,8 @@ export default function App() {
           endInfo={lastSettle}
           onResume={() => scene?.playResume()}
           onRestart={() => scene?.playRestart()}
+          onTogglePause={() => scene?.playTogglePause()}
+          onReplay={() => scene?.playReplayToggle()}
           onStartMatch={handleStartMatch}
           onExit={() => navigate('menu')}
           onToggleMuted={() => gameStore.setMuted(!state.muted)}

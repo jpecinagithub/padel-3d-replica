@@ -105,21 +105,41 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 18px;
+  padding: 14px 18px;
 }
 
-.hud-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+/* Fase 10: franja superior en tres columnas — izquierda (selector de
+   modo, salida y monedas), centro (marcador-píldora y banda de
+   mensajes) y un espaciador simétrico a la derecha. */
+.hud-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
   gap: 12px;
 }
 
-/* Selector de modo de juego (Fase 4): entrenamiento o partido libre. */
+.hud-topleft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-topcenter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-topright {
+  min-width: 0;
+}
+
+/* Selector de modo de juego (Fase 4): entrenamiento o partido. */
 .mode-selector {
   display: flex;
-  justify-content: center;
-  gap: 10px;
+  gap: 8px;
   pointer-events: auto;
 }
 
@@ -129,26 +149,85 @@ body {
   border-radius: 999px;
   padding: 7px 14px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .hud-btn {
   pointer-events: auto;
 }
 
+/* Banda breve de mensajes del punto, bajo el marcador (Fase 10). */
+.hud-band {
+  margin: 0;
+  background: rgba(13, 21, 40, 0.85);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 5px 18px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+  max-width: 92vw;
+}
+
+/* Columna de botones circulares del borde derecho (Fase 10): reiniciar,
+   cámara/repetición y pausa, como en el modelo. Solo escritorio: en
+   táctil esas acciones ya viven en la columna de utilidades. */
+.hud-side-actions {
+  position: absolute;
+  right: 16px;
+  top: 118px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.side-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: rgba(13, 21, 40, 0.72);
+  color: var(--text);
+  font-size: 1.12rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  pointer-events: auto;
+  padding: 0;
+}
+
+.side-btn:hover {
+  background: rgba(38, 54, 88, 0.85);
+}
+
+/* Franja inferior (Fase 10): SUPERGOLPE y velocidad a la izquierda,
+   aguja fina y UNA línea de ayuda contextual en el centro, cámara e
+   IA a la derecha. Nada de esta franja entra en la zona central. */
 .hud-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hud-bottom-side {
+  flex: 1 1 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hud-bottom-right {
+  justify-content: flex-end;
+}
+
+.hud-bottom-center {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-}
-
-.hud-label {
-  margin: 0;
-  background: rgba(13, 21, 40, 0.82);
-  border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-weight: 700;
+  gap: 6px;
 }
 
 .hud-help {
@@ -158,40 +237,20 @@ body {
   border-radius: 999px;
   padding: 5px 14px;
   font-size: 0.85rem;
+  text-align: center;
 }
 
-.hud-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.hud-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-}
-
-.hud-message {
-  margin: 0;
-  background: rgba(13, 21, 40, 0.85);
-  border: 1px solid var(--panel-border);
-  border-radius: 12px;
-  padding: 10px 22px;
-  font-size: 1.25rem;
-  font-weight: 800;
-}
-
-/* Aguja del saque: zona buena ±18% y punto dulce ±7% en torno al centro. */
+/* Aguja del saque (Fase 10): la misma mecánica de siempre (periodo
+   1,15 s, punto dulce ±7 %) en un calibre FINO del borde inferior.
+   Zona buena ±18 % y punto dulce ±7 % en torno al centro. */
 .needle-gauge {
-  width: min(520px, 80vw);
+  width: min(430px, 52vw);
   pointer-events: none;
 }
 
 .needle-track {
   position: relative;
-  height: 26px;
+  height: 10px;
   border-radius: 999px;
   background: rgba(13, 21, 40, 0.9);
   border: 1px solid var(--panel-border);
@@ -220,50 +279,21 @@ body {
   position: absolute;
   top: -2px;
   bottom: -2px;
-  width: 5px;
-  margin-left: -2.5px;
+  width: 4px;
+  margin-left: -2px;
   border-radius: 3px;
   background: #f5f7ff;
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
 }
 
 .needle-caption {
-  margin: 8px 0 0;
+  margin: 5px 0 0;
   text-align: center;
   font-weight: 700;
+  font-size: 0.8rem;
   background: rgba(13, 21, 40, 0.75);
   border-radius: 999px;
-  padding: 4px 12px;
-}
-
-.rally-summary {
-  background: rgba(13, 21, 40, 0.88);
-  border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  padding: 14px 24px;
-  text-align: center;
-}
-
-.rally-summary p {
-  margin: 4px 0;
-}
-
-.rally-cause {
-  font-weight: 800;
-  font-size: 1.1rem;
-}
-
-.rally-next {
-  opacity: 0.85;
-  font-size: 0.9rem;
-}
-
-.hud-meters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  padding: 3px 12px;
 }
 
 .meter {
@@ -283,8 +313,8 @@ body {
 }
 
 .meter-track {
-  width: 130px;
-  height: 10px;
+  width: 120px;
+  height: 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
   overflow: hidden;
@@ -658,52 +688,64 @@ body {
 
 /* ---- Fase 5: marcador oficial, fin de partido y repetición ---- */
 
+/* Marcador-píldora (Fase 10): una sola pastilla centrada arriba, con
+   separadores finos; el equipo al saque destaca en lima y con punto. */
 .scoreboard {
   display: flex;
-  align-items: stretch;
-  justify-content: center;
-  gap: 10px;
-  margin: 8px auto 0;
-  width: fit-content;
+  align-items: center;
+  gap: 14px;
+  background: rgba(10, 16, 30, 0.85);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 7px 18px;
   max-width: 96vw;
 }
 
 .score-side {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(13, 21, 40, 0.88);
-  border: 1px solid var(--panel-border);
-  border-radius: 12px;
-  padding: 6px 14px;
-}
-
-.score-side.serving {
-  border-color: var(--lime);
+  gap: 9px;
 }
 
 .score-name {
   font-weight: 800;
   letter-spacing: 0.04em;
   font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 .score-games {
-  font-size: 1.7rem;
+  font-size: 1.55rem;
   font-weight: 900;
   line-height: 1;
 }
 
 .score-points {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 800;
-  color: var(--lime);
+  color: var(--muted);
   min-width: 2.2ch;
   text-align: center;
 }
 
-.score-ball {
-  font-size: 0.95rem;
+.score-side.serving .score-games,
+.score-side.serving .score-points {
+  color: var(--lime-bright);
+}
+
+.score-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--lime-bright);
+  box-shadow: 0 0 8px rgba(198, 226, 101, 0.85);
+  flex: none;
+}
+
+.score-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--panel-border);
 }
 
 .score-mid {
@@ -711,12 +753,13 @@ body {
   align-items: center;
 }
 
-.score-set {
-  font-size: 0.8rem;
-  opacity: 0.85;
-  background: rgba(13, 21, 40, 0.75);
-  border-radius: 999px;
-  padding: 4px 10px;
+.score-mode {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .score-badge {
@@ -726,6 +769,7 @@ body {
   background: #31456e;
   border-radius: 999px;
   padding: 5px 12px;
+  white-space: nowrap;
 }
 
 .score-gold {
@@ -884,24 +928,34 @@ body {
 /* ---- Fase 7: HUD compacto en pantallas estrechas (≤760 px) ----
    Solo presentación: el HUD de escritorio queda intacto y en móvil
    se reduce a lo esencial durante el juego. Los chips informativos
-   secundarios (.hud-chip-opt: saque, estado de la IA, fase, cámara y
-   sonido) se ocultan porque esa información ya está en el marcador
-   (la 🎾 marca quién saca) y en la columna táctil de utilidades
-   (📷/🔊). La etiqueta larga y la ayuda de teclado de la franja
-   inferior se ocultan: en táctil no aplican y su hueco lo ocupan el
-   joystick y GOLPE, que bajan de bottom:118px a bottom:92px. */
+   secundarios (.hud-chip-opt: cámara y datos de la IA) se ocultan
+   porque esa información ya está en el marcador (el punto lima marca
+   quién saca) y en la columna táctil de utilidades (📷/🔊). La línea
+   de ayuda contextual se oculta: en táctil no aplica y su hueco lo
+   ocupan el joystick y GOLPE, que bajan de bottom:118px a bottom:92px.
+   Con el layout de la Fase 10 la franja superior se apila (modo y
+   salida en una fila centrada; el marcador-píldora debajo) y la
+   franja inferior conserva solo los medidores: el SUPERGOLPE queda
+   en la esquina inferior izquierda, BAJO el joystick (que flota a
+   bottom:92px), sin solaparse con él. */
 
 @media (max-width: 760px) {
   .court-hud {
     padding: 10px;
   }
 
-  .hud-row {
+  .hud-top {
+    grid-template-columns: 1fr;
     gap: 8px;
   }
 
-  .hud-chips {
+  .hud-topleft {
+    justify-content: center;
     gap: 6px;
+  }
+
+  .hud-topright {
+    display: none;
   }
 
   .hud-chip {
@@ -913,17 +967,16 @@ body {
     display: none;
   }
 
-  /* Marcador oficial reducido pero legible. */
+  /* Marcador-píldora reducido pero legible. */
   .scoreboard {
-    gap: 6px;
-    margin-top: 6px;
+    gap: 8px;
+    padding: 5px 12px;
+    border-radius: 12px;
     max-width: 98vw;
   }
 
   .score-side {
-    gap: 7px;
-    padding: 4px 10px;
-    border-radius: 10px;
+    gap: 6px;
   }
 
   .score-name {
@@ -938,19 +991,23 @@ body {
     font-size: 1rem;
   }
 
-  .score-ball {
-    font-size: 0.85rem;
+  .score-mode {
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
   }
 
-  .score-set,
   .score-badge {
     font-size: 0.68rem;
     padding: 3px 8px;
   }
 
+  .score-dot {
+    width: 7px;
+    height: 7px;
+  }
+
   .mode-selector {
     gap: 6px;
-    margin-top: 6px;
   }
 
   .mode-selector .btn-small {
@@ -958,17 +1015,10 @@ body {
     font-size: 0.82rem;
   }
 
-  /* Mensajes centrales y aguja: compactos, sin invadir laterales. */
-  .hud-center {
-    gap: 10px;
-  }
-
-  .hud-message {
-    font-size: 1rem;
-    padding: 8px 16px;
-    border-radius: 10px;
+  .hud-band {
+    font-size: 0.82rem;
+    padding: 4px 12px;
     max-width: 94vw;
-    text-align: center;
   }
 
   .replay-badge {
@@ -976,52 +1026,26 @@ body {
     padding: 5px 12px;
   }
 
+  /* Aguja fina en la franja inferior, sin pisar los controles. */
   .needle-gauge {
-    width: 92vw;
-  }
-
-  .needle-track {
-    height: 20px;
+    width: min(300px, 62vw);
   }
 
   .needle-caption {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     padding: 3px 10px;
-  }
-
-  .rally-summary {
-    padding: 10px 14px;
-    max-width: 94vw;
-  }
-
-  .rally-summary p {
-    font-size: 0.9rem;
-  }
-
-  .rally-cause {
-    font-size: 1rem;
-  }
-
-  .rally-next {
-    font-size: 0.8rem;
   }
 
   /* Franja inferior: solo medidores, en una línea compacta. */
   .hud-bottom {
-    gap: 4px;
-  }
-
-  .hud-label,
-  .hud-help,
-  .hud-bottom .hud-btn {
-    display: none;
-  }
-
-  .hud-meters {
     gap: 6px;
   }
 
-  .hud-meters .hud-chip {
+  .hud-help {
+    display: none;
+  }
+
+  .hud-bottom-side .hud-chip {
     padding: 4px 9px;
     font-size: 0.78rem;
   }
@@ -1109,6 +1133,7 @@ body {
 .btn:focus-visible,
 .seg-btn:focus-visible,
 .icon-btn:focus-visible,
+.side-btn:focus-visible,
 .touch-btn:focus-visible,
 .touch-util:focus-visible {
   outline: 2px solid var(--lime);
@@ -1124,15 +1149,26 @@ body {
     padding: 8px 10px;
   }
 
+  .hud-top {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .hud-topleft {
+    justify-content: center;
+  }
+
+  .hud-topright {
+    display: none;
+  }
+
   .hud-chip-opt,
-  .hud-label,
-  .hud-help,
-  .hud-bottom .hud-btn {
+  .hud-help {
     display: none;
   }
 
   .scoreboard {
-    padding: 4px 10px;
+    padding: 4px 12px;
     gap: 8px;
   }
 
@@ -1144,11 +1180,7 @@ body {
     font-size: 0.95rem;
   }
 
-  .hud-meters {
-    gap: 6px;
-  }
-
-  .hud-meters .hud-chip {
+  .hud-bottom-side .hud-chip {
     padding: 4px 9px;
     font-size: 0.78rem;
   }
@@ -1161,6 +1193,19 @@ body {
   .meter-track {
     width: 84px;
     height: 8px;
+  }
+
+  /* Columna derecha compacta en pantallas bajas. */
+  .hud-side-actions {
+    top: 54px;
+    right: 10px;
+    gap: 8px;
+  }
+
+  .side-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
   }
 
   .touch-joystick {

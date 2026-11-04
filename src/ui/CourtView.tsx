@@ -6,6 +6,7 @@ import type { MatchProbe } from '../game/Match';
 import type { MatchSummary } from '../game/MatchFlow';
 import type { PlayProbe } from '../game/PadelScene';
 import { NEEDLE_PERIOD, needleZone } from '../game/Shots';
+import { detectTouchCapable } from '../game/TouchInput';
 import { aiLevelById } from '../state/modes';
 import type { Settings } from '../state/store';
 import { TouchControls } from './TouchControls';
@@ -25,6 +26,10 @@ interface CourtViewProps {
   onRestart: () => void;
   onStartMatch: () => void;
   onExit: () => void;
+  /** Fase 10: botón ⏸ de la columna derecha (equivale a ESC). */
+  onTogglePause: () => void;
+  /** Fase 10: botón 🎥 cuando hay repetición disponible (equivale a V). */
+  onReplay: () => void;
   /** Fase 6: botón de mute y controles táctiles. */
   onToggleMuted: () => void;
   onTouchMove: (x: number, z: number) => void;
@@ -32,43 +37,52 @@ interface CourtViewProps {
   onTouchHeld: (code: string, held: boolean) => void;
 }
 
-const PHASE_LABEL: Record<PlayProbe['rally']['state'], string> = {
-  'serve-ready': 'Saque',
-  'serve-toss': 'Saque',
-  rally: 'Rally',
-  ended: 'Fin del rally',
-  'match-over': 'Fin del partido',
-};
-
-const AI_STATE_LABEL: Record<MatchProbe['ai']['state'], string> = {
-  waiting: 'espera',
-  reacting: 'reacciona',
-  moving: 'se mueve',
-  hitting: 'golpea',
-  recovering: 'recupera',
-  serving: 'saca',
-};
-
-const SERVER_LABEL: Record<MatchProbe['match']['server'], string> = {
-  human: 'tú',
-  partner: 'tu compañero',
-  rival: 'el rival',
-  rival2: 'el rival 2',
-};
-
 function isMatchProbe(probe: PlayProbe | null): probe is MatchProbe {
   return probe !== null && 'match' in probe;
 }
 
 /**
- * Vista de pista con dos modos (elegibles arriba, al entrar):
+ * ¿Manda la UI táctil? Mismo criterio que TouchControls (dispositivo
+ * táctil o viewport estrecho): si los controles táctiles están
+ * visibles, la columna de botones de escritorio (Fase 10) se oculta
+ * para no duplicar cámara/repetición/pausa/sonido en el mismo borde.
+ */
+function useTouchUi(): boolean {
+  const [touchUi, setTouchUi] = useState(false);
+  useEffect(() => {
+    const narrow = window.matchMedia('(max-width: 760px)');
+    const coarse = window.matchMedia('(pointer: coarse)');
+    const update = () => setTouchUi(detectTouchCapable() || narrow.matches);
+    update();
+    narrow.addEventListener('change', update);
+    coarse.addEventListener('change', update);
+    return () => {
+      narrow.removeEventListener('change', update);
+      coarse.removeEventListener('change', update);
+    };
+  }, []);
+  return touchUi;
+}
+
+/**
+ * Vista de pista con dos modos (elegibles arriba a la izquierda):
  * - Entrenamiento (Fase 3, intacto): saque con aguja y rally libre.
  * - Partido contra la IA (Fase 5): partido COMPLETO con marcador
  *   oficial (puntos/juegos/set, tiebreak, punto de oro), monedas por
  *   punto/juego/resultado y modos Partida rápida / Torneo / Mundial
  *   con carrera persistente. Al cerrar el partido, pantalla de fin con
  *   el desglose de monedas. Tecla V: repetición del último punto.
- * El estado se lee del probe del modo activo unas 16 veces por segundo.
+ *
+ * Layout (Fase 10, adaptado al modelo): el CENTRO de la pantalla queda
+ * libre durante el juego. Arriba: selector de modo y salida a la
+ * izquierda; marcador-píldora centrado con la banda de mensajes del
+ * punto justo debajo. Derecha: botones circulares ⟳ (reiniciar),
+ * 🎥 (cámara o repetición, según el estado) y ⏸ (pausa). Abajo:
+ * medidor SUPERGOLPE a la izquierda, aguja del saque fina y UNA línea
+ * de ayuda contextual en el centro, cámara/IA a la derecha. Los
+ * paneles de pausa y de fin de partido son modales con el juego
+ * detenido y siguen centrados. El estado se lee del probe del modo
+ * activo unas 16 veces por segundo.
  */
 export function CourtView({
   cameraKind,
@@ -85,12 +99,15 @@ export function CourtView({
   onRestart,
   onStartMatch,
   onExit,
+  onTogglePause,
+  onReplay,
   onToggleMuted,
   onTouchMove,
   onTouchPress,
   onTouchHeld,
 }: CourtViewProps) {
   const [probe, setProbe] = useState<PlayProbe | null>(null);
+  const touchUi = useTouchUi();
 
   useEffect(() => {
     const tick = () => setProbe(getProbe());
@@ -110,6 +127,7 @@ export function CourtView({
   const speedKmh = Math.round((probe?.ball.speed ?? 0) * 3.6);
   const humanServing = !match || match.match.server === 'human';
   const aiLevelName = aiLevelById(settings.opponentLevel).name;
+  const replayActive = match?.replay.active ?? false;
 
   const modeTitle = career.active
     ? `${career.mode.id === 2 ? '🌍' : '🏆'} ${career.mode.name} · ${career.roundName}${
@@ -135,6 +153,64 @@ export function CourtView({
       ? `${career.mode.name} (${career.roundName})`
       : 'Partida rápida';
 
+  // Fase 10: la columna derecha (⟳ 🎥 ⏸) solo existe en escritorio sin
+  // controles táctiles y fuera de los estados modales/repetición.
+  const showSideActions = !touchUi && !paused && !matchOver && !replayActive;
+  const replayOffered = match !== null && phase === 'ended';
+  const handleCameraReplay = () => {
+    if (replayOffered) onReplay();
+    else onCycleCamera();
+  };
+
+  // Fase 10: banda bajo el marcador — el mensaje del punto (resultado
+  // del saque durante el rally; causa y ganador al cerrarse). En
+  // serve-ready/toss mandan la línea de ayuda y la aguja, no la banda.
+  const bandText = (() => {
+    if (!probe || replayActive) return null;
+    if (phase === 'ended' && !matchOver) {
+      if (!probe.rally.message) return null;
+      return match
+        ? `${match.rally.winner === 'human' ? 'Punto tuyo 🏆' : 'Punto del rival'} · ${probe.rally.message}`
+        : probe.rally.message;
+    }
+    if (phase === 'rally') return probe.rally.message || null;
+    return null;
+  })();
+
+  // Fase 10: UNA línea de ayuda contextual abajo en el centro, solo
+  // cuando el estado la justifica (con «Ayudas» desactivado no hay
+  // línea: semántica de guides.ts intacta). En el lanzamiento, el pie
+  // de la aguja hace de línea; en rally no hay línea.
+  const helpLine = (() => {
+    if (!guides.help) return null;
+    if (phase === 'serve-ready') {
+      if (match) {
+        return humanServing
+          ? 'Tu saque: ESPACIO para lanzar la bola y golpearla en el punto dulce'
+          : null;
+      }
+      return 'ESPACIO para lanzar la bola · golpéala en el punto dulce';
+    }
+    if (phase === 'ended' && !matchOver) {
+      return match
+        ? 'ESPACIO: siguiente saque · V: repetición del punto'
+        : 'ESPACIO o R: siguiente saque (lado contrario)';
+    }
+    return null;
+  })();
+
+  const servingHome =
+    match !== null && (match.score.server === 'human' || match.score.server === 'partner');
+  const servingAway =
+    match !== null && (match.score.server === 'rival' || match.score.server === 'rival2');
+  const scoreCenter = match?.score.tiebreak
+    ? null
+    : match?.score.goldPoint
+      ? null
+      : `SET · ${career.active ? `${career.mode.name} ${career.roundName}` : 'PARTIDA RÁPIDA'} · ${
+          settings.doubles ? 'DOBLES' : 'INDIVIDUALES'
+        }`;
+
   // Fase 8 · C5: gestión de foco de los paneles modales (pausa y fin de
   // partido): al abrirse, el foco va a su primer botón; al cerrarse,
   // vuelve a donde estaba.
@@ -156,134 +232,113 @@ export function CourtView({
 
   return (
     <div className="court-hud" aria-label={match ? 'Partido contra la IA' : 'Entrenamiento en pista'}>
-      <div className="hud-row">
-        <div className="hud-chips">
+      <div className="hud-top">
+        <div className="hud-topleft">
+          <div className="mode-selector" role="group" aria-label="Modo de juego">
+            <button
+              type="button"
+              className={`btn btn-small${playMode === 'training' ? ' btn-primary' : ''}`}
+              onClick={() => onSelectMode('training')}
+            >
+              🏋️ Entrenamiento
+            </button>
+            <button
+              type="button"
+              className={`btn btn-small${playMode === 'match' ? ' btn-primary' : ''}`}
+              onClick={() => onSelectMode('match')}
+            >
+              {modeTitle}
+            </button>
+          </div>
+          <button type="button" className="icon-btn hud-btn" onClick={onExit}>
+            ← Menú
+          </button>
           {match ? (
-            <>
-              <span className="hud-chip">{modeTitle} · v1.1.2</span>
-              <span className="hud-chip hud-chip-opt">Saca: {SERVER_LABEL[match.match.server]}</span>
-              <span className="hud-chip hud-chip-opt">
-                IA {aiLevelName}: {AI_STATE_LABEL[match.ai.state]}
-                {match.ai.lastShot ? ` · ${match.ai.lastShot}` : ''}
-              </span>
-              <span className="hud-chip">🪙 +{match.economy.earned} en este partido</span>
-            </>
+            <span className="hud-chip">🪙 +{match.economy.earned} en este partido</span>
           ) : (
-            <span className="hud-chip">🏋️ Entrenamiento · Fase 3</span>
+            <span className="hud-chip">🏋️ Entrenamiento · saque con aguja</span>
           )}
-          <span className="hud-chip hud-chip-opt">Estado: {PHASE_LABEL[phase]}</span>
-          <span className="hud-chip hud-chip-opt">🎥 {CAMERA_NAMES[cameraKind]}</span>
-          <span className="hud-chip hud-chip-opt">{muted ? '🔇 Silencio (M)' : '🔊 Sonido (M)'}</span>
         </div>
-        <button type="button" className="icon-btn hud-btn" onClick={onExit}>
-          ← Menú
-        </button>
+
+        <div className="hud-topcenter">
+          {match && (
+            <div className="scoreboard" aria-label="Marcador oficial">
+              <div className={`score-side${servingHome ? ' serving' : ''}`}>
+                <span className="score-name">{settings.doubles ? 'TÚ + CPU' : 'TÚ'}</span>
+                {servingHome && <span className="score-dot" title="Al saque" />}
+                <span className="score-games">{match.score.games[0]}</span>
+                <span className="score-points">{match.score.labels[0]}</span>
+              </div>
+              <div className="score-sep" aria-hidden="true" />
+              <div className="score-mid">
+                {match.score.tiebreak ? (
+                  <span className="score-badge">TIEBREAK</span>
+                ) : match.score.goldPoint ? (
+                  <span className="score-badge score-gold">⭐ PUNTO DE ORO</span>
+                ) : (
+                  <span className="score-mode">{scoreCenter}</span>
+                )}
+              </div>
+              <div className="score-sep" aria-hidden="true" />
+              <div className={`score-side${servingAway ? ' serving' : ''}`}>
+                <span className="score-games">{match.score.games[1]}</span>
+                <span className="score-points">{match.score.labels[1]}</span>
+                {servingAway && <span className="score-dot" title="Al saque" />}
+                <span className="score-name">
+                  {career.team ? `${career.team.flag} ${career.team.name}` : 'CPU'}
+                </span>
+              </div>
+            </div>
+          )}
+          {replayActive && (
+            <p className="replay-badge" role="status">
+              🔁 REPETICIÓN · cámara lenta — V para volver
+            </p>
+          )}
+          {bandText && (
+            <p className="hud-band" role="status">
+              {bandText}
+            </p>
+          )}
+        </div>
+
+        <div className="hud-topright" aria-hidden="true" />
       </div>
 
-      {match && (
-        <div className="scoreboard" aria-label="Marcador oficial">
-          <div className={`score-side${match.score.server === 'human' || match.score.server === 'partner' ? ' serving' : ''}`}>
-            <span className="score-name">TÚ{settings.doubles ? ' (equipo)' : ''}</span>
-            <span className="score-games">{match.score.games[0]}</span>
-            <span className="score-points">{match.score.labels[0]}</span>
-            {(match.score.server === 'human' || match.score.server === 'partner') && (
-              <span className="score-ball" title="Al saque">🎾</span>
-            )}
-          </div>
-          <div className="score-mid">
-            {match.score.tiebreak ? (
-              <span className="score-badge">TIEBREAK</span>
-            ) : match.score.goldPoint ? (
-              <span className="score-badge score-gold">⭐ PUNTO DE ORO</span>
-            ) : (
-              <span className="score-set">Set a {match.score.gamesToWin}</span>
-            )}
-          </div>
-          <div className={`score-side${match.score.server === 'rival' || match.score.server === 'rival2' ? ' serving' : ''}`}>
-            <span className="score-name">{career.team ? `${career.team.flag} ${career.team.name}` : 'RIVAL'}</span>
-            <span className="score-games">{match.score.games[1]}</span>
-            <span className="score-points">{match.score.labels[1]}</span>
-            {(match.score.server === 'rival' || match.score.server === 'rival2') && (
-              <span className="score-ball" title="Al saque">🎾</span>
-            )}
-          </div>
+      {showSideActions && (
+        <div className="hud-side-actions">
+          <button
+            type="button"
+            className="side-btn"
+            onClick={onRestart}
+            title="Reiniciar rally (R)"
+            aria-label="Reiniciar rally"
+          >
+            ⟳
+          </button>
+          <button
+            type="button"
+            className="side-btn"
+            onClick={handleCameraReplay}
+            title={replayOffered ? 'Repetición del último punto (V)' : 'Cambiar cámara (C)'}
+            aria-label={replayOffered ? 'Repetición del último punto' : 'Cambiar cámara'}
+          >
+            🎥
+          </button>
+          <button
+            type="button"
+            className="side-btn"
+            onClick={onTogglePause}
+            title="Pausa (ESC)"
+            aria-label="Pausa"
+          >
+            ⏸
+          </button>
         </div>
       )}
 
-      <div className="mode-selector" role="group" aria-label="Modo de juego">
-        <button
-          type="button"
-          className={`btn btn-small${playMode === 'training' ? ' btn-primary' : ''}`}
-          onClick={() => onSelectMode('training')}
-        >
-          🏋️ Entrenamiento
-        </button>
-        <button
-          type="button"
-          className={`btn btn-small${playMode === 'match' ? ' btn-primary' : ''}`}
-          onClick={() => onSelectMode('match')}
-        >
-          {modeTitle}
-        </button>
-      </div>
-
-      <div className="hud-center">
-        {match?.replay.active && (
-          <p className="replay-badge" role="status">
-            🔁 REPETICIÓN · cámara lenta — V para volver
-          </p>
-        )}
-        {probe?.rally.message && <p className="hud-message">{probe.rally.message}</p>}
-
-        {phase === 'serve-toss' && needlePct !== null && humanServing && guides.needle && (
-          <div className="needle-gauge" role="img" aria-label="Aguja del saque">
-            <div className="needle-track">
-              <div className="needle-sweet" />
-              <div className="needle-good" />
-              <div
-                className={`needle-marker needle-${zone ?? ''}`}
-                style={{ left: `${needlePct}%` }}
-              />
-            </div>
-            <p className="needle-caption">
-              {zone === 'perfect'
-                ? '¡Punto dulce! ESPACIO ahora'
-                : `Aguja ${(needleSeconds ?? 0).toFixed(2)} s — ESPACIO en la zona verde`}
-            </p>
-          </div>
-        )}
-
-        {phase === 'ended' && probe && !matchOver && (
-          <div className="rally-summary">
-            {match ? (
-              <>
-                <p>
-                  Punto {match.rally.winner === 'human' ? 'tuyo 🏆' : 'del rival'} · marcador{' '}
-                  {match.score.games[0]}–{match.score.games[1]} · golpes de la IA: {match.match.aiHits}
-                </p>
-                <p className="rally-cause">{probe.rally.lastCause}</p>
-                {guides.help && (
-                  <p className="rally-next">
-                    ESPACIO: siguiente saque (saca {SERVER_LABEL[match.match.server]}) · V: repetición
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                <p>
-                  Rally terminado: {probe.rally.hits} golpe{probe.rally.hits === 1 ? '' : 's'}
-                  {probe.rally.lastShot ? ` · último: ${probe.rally.lastShot}` : ''}
-                </p>
-                <p className="rally-cause">{probe.rally.lastCause}</p>
-                {guides.help && <p className="rally-next">ESPACIO o R: siguiente saque (lado contrario)</p>}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
       <div className="hud-bottom">
-        <div className="hud-meters">
+        <div className="hud-bottom-side hud-bottom-left">
           {guides.superMeter && (
             <div className="meter" aria-label="Medidor de supergolpe">
               <span className="meter-label">SUPERGOLPE</span>
@@ -297,34 +352,37 @@ export function CourtView({
             </div>
           )}
           <span className="hud-chip">🎾 {speedKmh} km/h</span>
-          {match ? (
-            <>
-              <span className="hud-chip">Golpes IA: {match.match.aiHits}</span>
-              <span className="hud-chip">Errores IA: {match.ai.errors}</span>
-            </>
-          ) : (
-            <>
-              <span className="hud-chip">Golpes: {probe?.rally.hits ?? 0}</span>
-              <span className="hud-chip">Faltas de saque: {probe?.serve.faults ?? 0}</span>
-            </>
+        </div>
+
+        <div className="hud-bottom-center">
+          {phase === 'serve-toss' && needlePct !== null && humanServing && guides.needle && (
+            <div className="needle-gauge" role="img" aria-label="Aguja del saque">
+              <div className="needle-track">
+                <div className="needle-sweet" />
+                <div className="needle-good" />
+                <div
+                  className={`needle-marker needle-${zone ?? ''}`}
+                  style={{ left: `${needlePct}%` }}
+                />
+              </div>
+              <p className="needle-caption">
+                {zone === 'perfect'
+                  ? '¡Punto dulce! ESPACIO ahora'
+                  : `Aguja ${(needleSeconds ?? 0).toFixed(2)} s — ESPACIO en la zona verde`}
+              </p>
+            </div>
+          )}
+          {helpLine && <p className="hud-help">{helpLine}</p>}
+        </div>
+
+        <div className="hud-bottom-side hud-bottom-right">
+          <span className="hud-chip hud-chip-opt">🎥 {CAMERA_NAMES[cameraKind]}</span>
+          {match && (
+            <span className="hud-chip hud-chip-opt">
+              IA {aiLevelName} · {match.match.aiHits} golpes · {match.ai.errors} errores
+            </span>
           )}
         </div>
-        <p className="hud-label">
-          {match
-            ? `${modeTitle} · v1.1.2 — marcador oficial (15/30/40, juegos y set), audio sintetizado y táctil${
-                settings.doubles ? ' · dobles' : ''
-              }; las monedas se abonan al cerrar el partido`
-            : 'Entrenamiento · Fase 3 — saque con aguja y rally libre sin marcador'}
-        </p>
-        {guides.help && (
-          <p className="hud-help">
-            WASD/flechas moverte · ESPACIO/clic golpear y sacar · W potente · S dejada · W+E globo ·
-            Q cortado · E liftado · C cámara · V repetición · R reiniciar · M sonido · ESC pausa
-          </p>
-        )}
-        <button type="button" className="btn btn-small hud-btn" onClick={onCycleCamera}>
-          Cambiar cámara (C)
-        </button>
       </div>
 
       {!paused && !matchOver && (

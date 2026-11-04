@@ -20,38 +20,40 @@
 //        disparo de audio del bote
 //     9  Partido: la IA devuelve ≥2 bolas (semilla 42,
 //        __padelTestLaunchAtAI)
-//    10  Repetición: __padelTestReplay + rótulo en el DOM + tecla V
-//    11  C5: la pausa mueve el foco al panel y Continuar lo devuelve
-//    12  Efectos: __padelWin deja partículas activas
-//    13  Set guiado completo (vía normal, __padelTestWinPoint):
+//    10  Fase 10: en rally, ningún elemento del HUD invade el
+//        rectángulo central de la ventana (bounding boxes en vivo)
+//    11  Repetición: __padelTestReplay + rótulo en el DOM + tecla V
+//    12  C5: la pausa mueve el foco al panel y Continuar lo devuelve
+//    13  Efectos: __padelWin deja partículas activas
+//    14  Set guiado completo (vía normal, __padelTestWinPoint):
 //        6-0, economía exacta 672 🪙 a nivel Medio y panel de fin
-//    14  Persistencia: wallet/stats en localStorage y tras recargar
-//    15  Tienda: comprar y equipar «Naranja Tour» (80 🪙)
-//    16  Torneo: run creado y guardado; Semifinal ganada 4-0 (+528),
+//    15  Persistencia: wallet/stats en localStorage y tras recargar
+//    16  Tienda: comprar y equipar «Naranja Tour» (80 🪙)
+//    17  Torneo: run creado y guardado; Semifinal ganada 4-0 (+528),
 //        panel que dice «Torneo (Semifinal)» (M3) y run a la Final
-//    17  A4+M3: con R sobre el panel, el partido nuevo es la Final
+//    18  A4+M3: con R sobre el panel, el partido nuevo es la Final
 //        DE LA CARRERA; al campeonar, el panel dice «Torneo
 //        (Final)», bonus 200 y carrera cerrada
-//    18  Audio: mute con M persiste en game.muted y congela los
+//    19  Audio: mute con M persiste en game.muted y congela los
 //        contadores; desmuteo correcto
-//    19  A1: sin WebGL, aviso de incompatibilidad visible, menú y
+//    20  A1: sin WebGL, aviso de incompatibilidad visible, menú y
 //        tienda usables y botón de reintento
-//    20  M4: con Ayudas=No desaparecen aguja, ayuda y medidor; con
+//    21  M4: con Ayudas=No desaparecen aguja, ayuda y medidor; con
 //        Repeticiones=Sí el punto se repite solo
-//    21  Cero errores de consola en la sesión principal
+//    22  Cero errores de consola en la sesión principal
 //
 //   Móvil emulado (390×844, hasTouch, isMobile)
-//    22  Controles táctiles visibles (joystick, GOLPE, utilidades)
-//    23  HUD compacto: ayuda/etiqueta/chips secundarios ocultos,
+//    23  Controles táctiles visibles (joystick, GOLPE, utilidades)
+//    24  HUD compacto: ayuda/etiqueta/chips secundarios ocultos,
 //        marcador visible y sin solapes joystick/franja inferior
-//    24  Joystick con eventos táctiles reales (CDP): el jugador
+//    25  Joystick con eventos táctiles reales (CDP): el jugador
 //        se desplaza (probe)
-//    25  Saque por toques: GOLPE lanza la aguja (visible) y el
+//    26  Saque por toques: GOLPE lanza la aguja (visible) y el
 //        segundo toque saca (contador 'serve')
-//    26  Botón ⏸ táctil: pausa el partido y muestra el panel
-//    27  Horizontal 844×390 (M5): mismo tratamiento compacto por
+//    27  Botón ⏸ táctil: pausa el partido y muestra el panel
+//    28  Horizontal 844×390 (M5): mismo tratamiento compacto por
 //        altura — sin solapes y sin textos de escritorio
-//    28  Cero errores de consola en las sesiones móviles
+//    29  Cero errores de consola en las sesiones móviles
 //
 // Uso (máquina limpia, desde la raíz del repo):
 //   npm ci
@@ -191,7 +193,7 @@ async function main() {
       const sp = await sceneProbe(page);
       const title = await page.locator('.game-title').isVisible();
       const version = await page.locator('.replica-subtitle').innerText();
-      return { ok: sp.ready === true && title && /v1\.1\.\d+/i.test(version), detail: `objetos=${sp.objects}, "${version.trim()}"` };
+      return { ok: sp.ready === true && title && /v1\.2\.\d+/i.test(version), detail: `objetos=${sp.objects}, "${version.trim()}"` };
     });
 
     await step('C3: sin ?hooks=1 no hay hooks de estado; los probes de lectura sí están', async () => {
@@ -303,6 +305,39 @@ async function main() {
         aiHits = (await probe(page)).match.aiHits;
       }
       return { ok: aiHits >= 2, detail: `aiHits=${aiHits}` };
+    });
+
+    await step('Fase 10: en rally, ningún elemento del HUD invade el centro de la pantalla', async () => {
+      // Centro libre: se fuerza un rally y se mide EN VIVO. Todo
+      // elemento hoja visible de .court-hud (fuera de los controles
+      // táctiles) debe quedar fuera del rectángulo central 40 %×40 %
+      // (se verifica el 30–70 % en ambos ejes, con margen).
+      await page.evaluate(() => window.__padelTestLaunchAtAI());
+      await page.waitForFunction(() => {
+        const p = window.__padelProbe();
+        return p && 'match' in p && p.rally.state === 'rally';
+      }, null, { polling: 100, timeout: 45_000 });
+      const invaders = await page.evaluate(() => {
+        const cx0 = window.innerWidth * 0.3;
+        const cx1 = window.innerWidth * 0.7;
+        const cy0 = window.innerHeight * 0.3;
+        const cy1 = window.innerHeight * 0.7;
+        const bad = [];
+        document.querySelectorAll('.court-hud *').forEach((el) => {
+          if (el.closest('.touch-controls')) return;
+          if (el.children.length > 0) return;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) return;
+          const st = getComputedStyle(el);
+          if (st.display === 'none' || st.visibility === 'hidden') return;
+          if (r.left < cx1 && r.right > cx0 && r.top < cy1 && r.bottom > cy0) {
+            bad.push(`${el.className}@${Math.round(r.left)},${Math.round(r.top)}`);
+          }
+        });
+        return bad;
+      });
+      await page.screenshot({ path: path.join(SHOTS, 'fase10-rally-centro-libre.png') });
+      return { ok: invaders.length === 0, detail: invaders.join(' · ') || 'centro libre en rally' };
     });
 
     await step('Repetición: hook + rótulo en el DOM + tecla V para salir', async () => {

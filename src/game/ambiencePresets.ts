@@ -32,6 +32,10 @@ export interface AmbiencePreset {
   mountainColor: string;
   /** Suelo exterior a la pista (fuera del apron). */
   groundColor: string;
+  /** Fase 10: intensidad emisiva de las ventanas del skyline (0 en día). */
+  buildingGlow: number;
+  /** Fase 10: opacidad de los conos de luz de los focos (0 en día). */
+  floodCones: number;
 }
 
 export const AMBIENCE_PRESETS: AmbiencePreset[] = [
@@ -57,6 +61,8 @@ export const AMBIENCE_PRESETS: AmbiencePreset[] = [
     cloudOpacity: 0.1,
     mountainColor: '#0d1626',
     groundColor: '#0b1220',
+    buildingGlow: 1.35,
+    floodCones: 0.13,
   },
   {
     id: 1,
@@ -80,6 +86,8 @@ export const AMBIENCE_PRESETS: AmbiencePreset[] = [
     cloudOpacity: 0.85,
     mountainColor: '#5a7d9c',
     groundColor: '#2e4a38',
+    buildingGlow: 0.04,
+    floodCones: 0,
   },
   {
     id: 2,
@@ -103,6 +111,8 @@ export const AMBIENCE_PRESETS: AmbiencePreset[] = [
     cloudOpacity: 0.5,
     mountainColor: '#4a3550',
     groundColor: '#1c2430',
+    buildingGlow: 0.55,
+    floodCones: 0.06,
   },
 ];
 

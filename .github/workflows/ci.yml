@@ -1,0 +1,29 @@
+# CI de la réplica: mismos pasos que en una máquina limpia
+# (ver e2e/README.md). La E2E usa el Chromium que instala el propio
+# Playwright; no hay rutas ni herramientas de ninguna máquina concreta.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependencias (limpio)
+        run: npm ci
+      - name: Tests unitarios (Vitest)
+        run: npm test
+      - name: Build (tsc + vite)
+        run: npm run build
+      - name: Instalar el Chromium de Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Regresión E2E
+        run: npm run test:e2e

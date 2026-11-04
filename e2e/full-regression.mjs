@@ -191,7 +191,7 @@ async function main() {
       const sp = await sceneProbe(page);
       const title = await page.locator('.game-title').isVisible();
       const version = await page.locator('.replica-subtitle').innerText();
-      return { ok: sp.ready === true && title && /v1\.1\.0/i.test(version), detail: `objetos=${sp.objects}, "${version.trim()}"` };
+      return { ok: sp.ready === true && title && /v1\.1\.\d+/i.test(version), detail: `objetos=${sp.objects}, "${version.trim()}"` };
     });
 
     await step('C3: sin ?hooks=1 no hay hooks de estado; los probes de lectura sí están', async () => {

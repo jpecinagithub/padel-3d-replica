@@ -9,6 +9,7 @@
   --muted: #9fb0c3;
   --lime: #b6f09c;
   --lime-strong: #a8e10c;
+  --lime-bright: #c6e265;
   --chip: rgba(70, 110, 180, 0.28);
   --danger: #e06c5a;
 }
@@ -370,6 +371,16 @@ body {
   background: rgba(255, 255, 255, 0.12);
 }
 
+/* Píldora de sonido de la portada: misma familia visual que el monedero. */
+.sound-pill {
+  background: var(--chip);
+  font-weight: 600;
+}
+
+.sound-pill:hover {
+  background: rgba(70, 110, 180, 0.45);
+}
+
 .game-title {
   text-align: center;
   font-size: clamp(2.6rem, 9vw, 4.2rem);
@@ -377,25 +388,28 @@ body {
   letter-spacing: 0.04em;
   margin: 10px 0 0;
   text-transform: uppercase;
+  text-shadow:
+    0 0 34px rgba(198, 226, 101, 0.22),
+    0 0 90px rgba(168, 225, 12, 0.1);
 }
 
 .game-title .accent {
-  color: var(--lime-strong);
+  color: var(--lime-bright);
 }
 
+/* Identidad de la réplica: línea pequeña y discreta al pie de la portada. */
 .replica-subtitle {
   text-align: center;
   color: var(--muted);
-  font-size: 0.85rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  margin: 2px 0 6px;
+  font-size: 0.8rem;
+  margin: 18px 0 0;
 }
 
 .tagline {
   text-align: center;
   color: var(--muted);
-  margin: 4px 0 18px;
+  font-size: 1.02rem;
+  margin: 6px 0 0;
 }
 
 .chip-row {
@@ -403,22 +417,41 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
-  margin: 14px 0 22px;
+  margin: 22px 0 0;
 }
 
 .chip {
   background: var(--chip);
+  border: 1px solid var(--panel-border);
   border-radius: 999px;
   padding: 5px 12px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   white-space: nowrap;
 }
 
+/* Columna central de acciones de la portada: botones grandes y centrados. */
 .menu-actions {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 8px;
+  width: min(560px, 100%);
+  margin: 24px auto 0;
+}
+
+.menu-actions .btn {
+  border-radius: 16px;
+  padding: 16px 18px;
+  font-size: 1.08rem;
+}
+
+.menu-actions .btn-primary {
+  background: var(--lime-bright);
+  border-color: var(--lime-bright);
+  font-size: 1.25rem;
+}
+
+.menu-actions .btn-primary:hover {
+  background: var(--lime);
 }
 
 .btn {
@@ -476,15 +509,24 @@ body {
 }
 
 .help-block {
-  margin-top: 22px;
+  margin-top: 26px;
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.55;
   text-align: center;
 }
 
+.help-block p {
+  margin: 3px 0;
+}
+
+.help-block strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
 .stats-line {
-  margin-top: 14px;
+  margin-top: 12px;
   text-align: center;
   color: var(--muted);
   font-size: 0.9rem;

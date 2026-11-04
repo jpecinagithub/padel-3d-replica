@@ -46,12 +46,16 @@ export interface SceneProbe {
   effects: EffectsProbe;
   /** Audio sintetizado (Fase 6): disparos, estado del contexto y mute. */
   audio: AudioProbe;
+  /** Modo de bajo consumo activo (Fase 8 · C4): menú sin modo de juego. */
+  lowPower: boolean;
 }
 
 export interface SceneHandlers {
   onToggleMuted: () => void;
   onPauseChange: (paused: boolean) => void;
   onMatchEnd: (summary: MatchSummary) => void;
+  /** Petición de partido nuevo del motor (tecla R; la app crea el run). */
+  onStartMatch: () => void;
 }
 
 export class PadelScene {
@@ -77,8 +81,11 @@ export class PadelScene {
     onToggleMuted: () => undefined,
     onPauseChange: () => undefined,
     onMatchEnd: () => undefined,
+    onStartMatch: () => undefined,
   };
   private playMode: PlayMode = 'none';
+  /** Contador para renderizar a media tasa en modo menú (C4). */
+  private menuFrameSkip = 0;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -86,7 +93,9 @@ export class PadelScene {
     // preserveDrawingBuffer: coste pequeño y constante; a cambio, los
     // tests visuales pueden muestrear los píxeles del canvas en cualquier
     // momento (SPEC §7.3), no solo justo tras un frame.
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // La escena nace en modo menú (sin juego): pixelRatio con tope 1
+    // (C4); al entrar en pista, setPlayMode lo sube a 2.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -113,6 +122,7 @@ export class PadelScene {
       getCareer: () => this.career,
       onEffect: (kind: 'win' | 'gold', at?: { x: number; y: number; z: number }) => this.handleEffect(kind, at),
       onMatchEnd: (summary: MatchSummary) => this.handlers.onMatchEnd(summary),
+      onRequestNewMatch: () => this.handlers.onStartMatch(),
       onSound: (event: SoundEvent) => {
         this.audio.dispatch(event);
       },
@@ -213,6 +223,13 @@ export class PadelScene {
     this.playMode = mode;
     this.training.setActive(mode === 'training');
     this.match.setActive(mode === 'match');
+    // Fase 8 · C4: sin modo de juego (menú/tienda/personalizar) la
+    // escena es un fondo decorativo — se limita el coste sin perderlo:
+    // pixelRatio con tope 1 y render a media tasa en update(). Al
+    // entrar en pista se restaura la calidad completa.
+    const dpr = window.devicePixelRatio || 1;
+    this.renderer.setPixelRatio(mode === 'none' ? Math.min(dpr, 1) : Math.min(dpr, 2));
+    this.resize();
     this.refreshCrowd();
   }
 
@@ -377,6 +394,13 @@ export class PadelScene {
       this.playMode === 'match' && this.match.isReplaying && focus ? focus.ball : null,
     );
     this.rig.update(dt);
+    // C4: en el menú (sin modo activo) basta media tasa de render: el
+    // fondo sigue animado (modos inactivos y cámara se actualizan
+    // igual) pero se dibuja un frame de cada dos.
+    if (this.playMode === 'none') {
+      this.menuFrameSkip = (this.menuFrameSkip + 1) % 2;
+      if (this.menuFrameSkip === 1) return;
+    }
     this.renderer.render(this.scene, this.rig.camera);
     this.frames += 1;
   }
@@ -408,6 +432,7 @@ export class PadelScene {
       pixelRatio: this.renderer.getPixelRatio(),
       effects: this.effects.probe(),
       audio: this.audio.probe(),
+      lowPower: this.playMode === 'none',
     };
   }
 

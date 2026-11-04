@@ -45,7 +45,10 @@ class FakeSource extends FakeNode {
   buffer: unknown = null;
   loop = false;
   playbackRate = makeParam(1);
-  start(): void {}
+  started = false;
+  start(): void {
+    this.started = true;
+  }
   stop(): void {}
 }
 
@@ -210,6 +213,54 @@ describe('Audio — grada en bucle', () => {
     expect(audio.probe().crowdActive).toBe(true);
     audio.stopCrowd();
     expect(audio.probe().crowdActive).toBe(false);
+  });
+});
+
+describe('Audio — grada con el contexto YA creado (Fase 8 · M1)', () => {
+  it('startCrowd construye y arranca los nodos de verdad (no solo el flag)', () => {
+    const { audio, fake } = audioWithFake();
+    audio.unlock(); // el contexto nace ANTES de pedir la grada (el caso del fallo)
+    expect(audio.probe().ctxState).toBe('running');
+    expect(audio.probe().crowdNodesCreated).toBe(false);
+    expect(audio.probe().crowdStarted).toBe(false);
+
+    expect(audio.startCrowd()).toBe(true);
+    const probe = audio.probe();
+    expect(probe.crowdActive).toBe(true);
+    expect(probe.crowdNodesCreated).toBe(true);
+    expect(probe.crowdStarted).toBe(true);
+    // Estructura real registrada por el contexto falso: la última
+    // fuente creada es la de la grada (en bucle y arrancada) y el
+    // último oscilador es su LFO (también arrancado).
+    const crowdSource = fake.sources[fake.sources.length - 1];
+    expect(crowdSource?.loop).toBe(true);
+    expect(crowdSource?.started).toBe(true);
+    const lfo = fake.oscillators[fake.oscillators.length - 1];
+    expect(lfo?.started).toBe(true);
+  });
+
+  it('ciclo entrar a pista → mute → desmute → salir → reentrar', () => {
+    const { audio } = audioWithFake();
+    audio.unlock();
+    audio.startCrowd();
+    expect(audio.probe().crowdStarted).toBe(true);
+
+    audio.setMuted(true); // mutear detiene la grada: los nodos dejan de existir
+    expect(audio.probe().crowdNodesCreated).toBe(false);
+    expect(audio.probe().crowdStarted).toBe(false);
+
+    audio.setMuted(false);
+    audio.startCrowd(); // la escena vuelve a pedirla al desmutear en pista
+    expect(audio.probe().crowdNodesCreated).toBe(true);
+    expect(audio.probe().crowdStarted).toBe(true);
+
+    audio.stopCrowd(); // salir de la pista
+    expect(audio.probe().crowdActive).toBe(false);
+    expect(audio.probe().crowdStarted).toBe(false);
+
+    audio.startCrowd(); // reentrar: se reconstruye y vuelve a arrancar
+    expect(audio.probe().crowdStarted).toBe(true);
+    expect(audio.probe().counts.crowd).toBe(3);
   });
 });
 

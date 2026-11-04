@@ -174,3 +174,34 @@ describe('MatchFlow — bonus de campeón', () => {
     expect(flow.summary?.coins.bonus).toBe(0);
   });
 });
+
+describe('MatchFlow — el resumen cierra la ronda JUGADA (Fase 8 · M3)', () => {
+  it('semifinal → final → campeonato: cada resumen lleva su propia ronda', () => {
+    // Semifinal del Torneo (no final de carrera).
+    const semi = new MatchFlow(cfg({
+      gamesToWin: 4, modeId: 1, isCareerFinal: false, modeName: 'Torneo', roundName: 'Semifinal',
+    }));
+    for (let g = 0; g < 4; g++) winGame(semi, 0);
+    expect(semi.summary?.modeName).toBe('Torneo');
+    expect(semi.summary?.roundName).toBe('Semifinal');
+    expect(semi.summary?.champion).toBe(false);
+
+    // Final: otro flujo con su propia configuración cerrada.
+    const final = new MatchFlow(cfg({
+      gamesToWin: 4, modeId: 1, isCareerFinal: true, modeName: 'Torneo', roundName: 'Final',
+    }));
+    for (let g = 0; g < 4; g++) winGame(final, 0);
+    expect(final.summary?.roundName).toBe('Final');
+    expect(final.summary?.champion).toBe(true);
+
+    // El resumen de la semifinal no se contamina con la final.
+    expect(semi.summary?.roundName).toBe('Semifinal');
+  });
+
+  it('un reset con otra ronda sustituye los nombres cerrados', () => {
+    const flow = new MatchFlow(cfg({ modeName: 'Torneo', roundName: 'Semifinal' }));
+    flow.reset(cfg({ gamesToWin: 4, modeId: 1, isCareerFinal: true, modeName: 'Torneo', roundName: 'Final' }));
+    for (let g = 0; g < 4; g++) winGame(flow, 0);
+    expect(flow.summary?.roundName).toBe('Final');
+  });
+});

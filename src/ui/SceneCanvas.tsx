@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { CameraKind } from '../game/cameraMath';
 import type { CareerStatus } from '../game/Career';
 import type { MatchSummary } from '../game/MatchFlow';
 import { PadelScene, type PlayMode } from '../game/PadelScene';
 import type { Wallet } from '../state/economy';
 import type { Settings } from '../state/store';
+import { tryCreateScene } from './sceneGuard';
 
 interface SceneCanvasProps {
   settings: Settings;
@@ -25,6 +27,8 @@ interface SceneCanvasProps {
   onPauseChange?: (paused: boolean) => void;
   /** Fin de partido (Fase 5): App abona monedas, stats y carrera. */
   onMatchEnd?: (summary: MatchSummary) => void;
+  /** Petición de partido nuevo del motor (tecla R; Fase 8 · A4). */
+  onStartMatch?: () => void;
 }
 
 interface WindowHooks {
@@ -64,9 +68,15 @@ export default function SceneCanvas({
   onToggleMuted,
   onPauseChange,
   onMatchEnd,
+  onStartMatch,
 }: SceneCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<PadelScene | null>(null);
+  // Fase 8 · A1: si la escena no puede crearse (sin WebGL), se guarda
+  // el error y se ofrece reintento; la UI sigue montada.
+  const [sceneError, setSceneError] = useState<string | null>(null);
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const interactiveRef = useRef(interactive);
   interactiveRef.current = interactive;
   const initialSettingsRef = useRef(settings);
@@ -74,18 +84,26 @@ export default function SceneCanvas({
   const initialMutedRef = useRef(muted);
   const initialCameraRef = useRef(cameraKind);
   const initialCareerRef = useRef(career);
-  const callbacksRef = useRef({ onScene, onToggleMuted, onPauseChange, onMatchEnd });
-  callbacksRef.current = { onScene, onToggleMuted, onPauseChange, onMatchEnd };
+  const callbacksRef = useRef({ onScene, onToggleMuted, onPauseChange, onMatchEnd, onStartMatch });
+  callbacksRef.current = { onScene, onToggleMuted, onPauseChange, onMatchEnd, onStartMatch };
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const scene = new PadelScene(container);
+    // A1: creación protegida — un fallo de WebGL no puede tumbar la app.
+    const created = tryCreateScene(() => new PadelScene(container));
+    if (!created.ok) {
+      setSceneError(created.error);
+      setErrorDismissed(false);
+      return;
+    }
+    const scene = created.value;
     sceneRef.current = scene;
     scene.setHandlers({
       onToggleMuted: () => callbacksRef.current.onToggleMuted?.(),
       onPauseChange: (paused) => callbacksRef.current.onPauseChange?.(paused),
       onMatchEnd: (summary) => callbacksRef.current.onMatchEnd?.(summary),
+      onStartMatch: () => callbacksRef.current.onStartMatch?.(),
     });
     scene.applySettings(initialSettingsRef.current);
     scene.applyWallet(initialWalletRef.current);
@@ -95,23 +113,36 @@ export default function SceneCanvas({
     callbacksRef.current.onScene?.(scene);
 
     const hooks = window as unknown as WindowHooks;
+    // Probes de SOLO LECTURA: siempre activos (no alteran el juego).
     hooks.__padelSceneProbe = () => scene.probe();
     // __padelProbe devuelve el probe del modo activo (entrenamiento o
     // partido); en modo entrenamiento es el mismo objeto de la Fase 3.
     hooks.__padelProbe = () => scene.playProbe();
     hooks.__gameProbe = () => scene.playProbe().player;
-    hooks.__padelTestServe = (needle01: number) => scene.testServe(needle01);
-    hooks.__padelTestLaunch = (options?: { fromX?: number }) => scene.testLaunch(options);
-    hooks.__padelTestSeed = (seed: number) => scene.testSeed(seed);
-    hooks.__padelTestAIServe = () => scene.testAIServe();
-    hooks.__padelTestLaunchAtAI = () => scene.testLaunchAtAI();
-    // Fase 5: puntos guiados, repetición y efectos (hooks del original).
-    hooks.__padelTestWinPoint = () => scene.testWinPoint();
-    hooks.__padelTestLosePoint = () => scene.testLosePoint();
-    hooks.__padelTestReplay = () => scene.testReplay();
-    hooks.__padelFX = () => scene.triggerFX('fx');
-    hooks.__padelWin = () => scene.triggerFX('win');
-    hooks.__padelGold = () => scene.triggerFX('gold');
+    // Fase 8 · C3 — política de hooks que FUERZAN estado (puntos
+    // guiados, semilla, saques y efectos a demanda): solo se registran
+    // en desarrollo o si la URL lleva ?hooks=1. Es una política de
+    // DEPURACIÓN contra activación accidental, NO una medida de
+    // seguridad: cualquiera puede añadir el parámetro a la URL. Es
+    // aceptable porque el juego es 100 % local, sin servidor: las
+    // «recompensas» son monedas guardadas en el navegador del propio
+    // jugador, sin valor fuera de él (ver README y CODEX_FIXES_INFORME).
+    const stateHooksEnabled =
+      import.meta.env.DEV || new URLSearchParams(window.location.search).get('hooks') === '1';
+    if (stateHooksEnabled) {
+      hooks.__padelTestServe = (needle01: number) => scene.testServe(needle01);
+      hooks.__padelTestLaunch = (options?: { fromX?: number }) => scene.testLaunch(options);
+      hooks.__padelTestSeed = (seed: number) => scene.testSeed(seed);
+      hooks.__padelTestAIServe = () => scene.testAIServe();
+      hooks.__padelTestLaunchAtAI = () => scene.testLaunchAtAI();
+      // Fase 5: puntos guiados, repetición y efectos (hooks del original).
+      hooks.__padelTestWinPoint = () => scene.testWinPoint();
+      hooks.__padelTestLosePoint = () => scene.testLosePoint();
+      hooks.__padelTestReplay = () => scene.testReplay();
+      hooks.__padelFX = () => scene.triggerFX('fx');
+      hooks.__padelWin = () => scene.triggerFX('win');
+      hooks.__padelGold = () => scene.triggerFX('gold');
+    }
 
     let raf = 0;
     let last = performance.now();
@@ -204,7 +235,9 @@ export default function SceneCanvas({
       scene.dispose();
       sceneRef.current = null;
     };
-  }, []);
+    // `attempt` entra en las dependencias solo para el reintento de A1:
+    // al pulsarlo, el efecto se desmonta y vuelve a intentar la escena.
+  }, [attempt]);
 
   useEffect(() => {
     sceneRef.current?.applySettings(settings);
@@ -235,5 +268,35 @@ export default function SceneCanvas({
     sceneRef.current?.setPlayMode(mode);
   }, [interactive, playMode]);
 
-  return <div ref={containerRef} className="scene-canvas" />;
+  return (
+    <>
+      <div ref={containerRef} className="scene-canvas" />
+      {sceneError &&
+        !errorDismissed &&
+        // Portal a body: dentro de .scene-layer (z-index 0, bajo el
+        // velo y los paneles) el aviso sería visible pero NO clicable.
+        createPortal(
+          <div className="webgl-fallback" role="alert">
+            <p>
+              ⚠ Tu navegador no pudo iniciar el 3D (WebGL no disponible), así que la pista no se
+              puede mostrar. El menú, la personalización y la tienda siguen funcionando.
+            </p>
+            <button
+              type="button"
+              className="btn btn-small"
+              onClick={() => {
+                setSceneError(null);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              Reintentar el 3D
+            </button>{' '}
+            <button type="button" className="btn btn-small" onClick={() => setErrorDismissed(true)}>
+              Entendido
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
 }

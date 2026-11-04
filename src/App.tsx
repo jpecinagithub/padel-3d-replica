@@ -121,6 +121,7 @@ export default function App() {
             onToggleMuted={() => gameStore.setMuted(!state.muted)}
             onPauseChange={setPaused}
             onMatchEnd={handleMatchEnd}
+            onStartMatch={handleStartMatch}
           />
         </Suspense>
       </div>

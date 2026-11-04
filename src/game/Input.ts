@@ -176,3 +176,16 @@ export class InputManager {
     };
   }
 }
+
+/**
+ * Vector de movimiento de juego a partir de los ejes crudos (Fase 8 ·
+ * M2): conserva la magnitud analógica — un joystick al 20 % mueve al
+ * 20 % de la velocidad del nivel — y solo recorta la longitud cuando
+ * supera 1 (las diagonales de teclado, que dan |(1,1)| = √2). Antes,
+ * Match y Training normalizaban siempre y el 20 % corría como el 100 %.
+ */
+export function moveVector(ax: number, az: number): { x: number; z: number } {
+  const len = Math.hypot(ax, az);
+  if (len <= 1 || len === 0) return { x: ax, z: az };
+  return { x: ax / len, z: az / len };
+}

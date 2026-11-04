@@ -10,7 +10,11 @@ assets externos.
 
 **URL de producción: https://padel-3d-replica.vercel.app**
 
-## Estado: v1.0.0 — juego completo (fases 0-6) + pulido (Fase 7)
+El reglamento de juego de la réplica, artículo por artículo con lo
+observado en el original separado de las decisiones propias, está en
+[`REGLAMENTO.md`](REGLAMENTO.md).
+
+## Estado: v1.1.0 — juego completo (fases 0-7) + correcciones de la revisión Codex (Fase 8)
 
 - **Fases 0+1 (andamiaje, lógica pura y UI).** Marcador (Score),
   modos, economía y tienda con persistencia en localStorage.
@@ -41,6 +45,15 @@ assets externos.
 - **Fase 7 (pulido).** HUD compacto en pantallas estrechas (≤760 px),
   batería E2E consolidada de regresión (`e2e/full-regression.mjs`) y
   preparación del despliegue. Ver `FASE7_INFORME.md`.
+- **Fase 8 (correcciones de la revisión Codex).** Sin WebGL la app ya
+  no desaparece (aviso y UI usable); la IA solo golpea tras su
+  reacción; los cerramientos laterales resuelven el punto sin bote; la
+  tecla R reinicia por el flujo de carrera; la grada suena con el
+  contexto ya creado; el joystick conserva su magnitud analógica; la
+  pantalla de fin muestra la ronda jugada; «Ayudas» y «Repeticiones»
+  tienen efecto real; HUD compacto también en horizontal; E2E
+  portable como dependencia del proyecto con CI. Ver
+  `CODEX_FIXES_INFORME.md`.
 
 ## Cómo se juega
 
@@ -61,7 +74,9 @@ gorras y pieles: 22 artículos).
   saque perfecto) · W potente (con la barra de SUPERGOLPE llena y
   bola alta, smash) · S dejada · W+E globo · Q cortado (mantener) ·
   E liftado (mantener) · C cámara · V repetición del último punto ·
-  R reiniciar rally · M sonido · ESC pausa.
+  R reiniciar (repite el saque; sobre el panel de fin, revancha o
+  siguiente ronda por el mismo flujo de carrera que los botones) ·
+  M sonido · ESC pausa.
 - **Táctil** (solo en dispositivos táctiles o pantallas ≤760 px):
   joystick izquierdo para moverte, botón GOLPE (= ESPACIO, también
   para el saque de aguja en dos toques), CORTADO y LIFTADO
@@ -76,9 +91,9 @@ Torneo/Mundial) se guarda en el navegador (localStorage, claves
 ## Desarrollo
 
 ```bash
-npm install
+npm ci
 npm run dev       # desarrollo
-npm test          # Vitest (lógica pura): 171 tests
+npm test          # Vitest (lógica pura e integración): 204 tests
 npm run build     # tsc --noEmit + vite build → dist/
 npm run preview   # sirve dist/ en local (puerto 4173)
 ```
@@ -86,31 +101,53 @@ npm run preview   # sirve dist/ en local (puerto 4173)
 ### E2E de regresión
 
 ```bash
-node e2e/full-regression.mjs   # batería completa contra vite preview
+npm ci
+npx playwright install chromium
+npm run test:e2e   # batería completa contra vite preview
 ```
 
-Arranca su propio `vite preview`, ejecuta en una pasada la batería
-clave de todo el juego (menú/escena, tienda, entrenamiento, partido
-con set guiado y persistencia, Torneo, repetición, efectos, audio y
-táctil en viewport móvil), imprime PASS/FAIL por check y termina con
-código de salida distinto de cero si algo falla. Playwright es
-herramienta de verificación de la VM (no dependencia del proyecto);
-ver `e2e/README.md`. Capturas en `e2e/screenshots/`.
+Playwright es dependencia de desarrollo del proyecto: la batería
+(`e2e/full-regression.mjs`) arranca su propio `vite preview`, ejecuta
+en una pasada la batería clave de todo el juego (menú/escena, tienda,
+entrenamiento, partido con set guiado y persistencia, Torneo completo
+con campeonato, repetición, efectos, audio, ajustes, sin-WebGL y
+táctil en retrato y horizontal), imprime PASS/FAIL por check y
+termina con código de salida distinto de cero si algo falla. El
+workflow `.github/workflows/ci.yml` corre los mismos pasos (npm ci,
+tests, build, instalación de Chromium y E2E). Detalle en
+`e2e/README.md`. Capturas en `e2e/screenshots/`.
+
+### Hooks de prueba y política `?hooks=1`
+
+Los probes de solo lectura (`__padelProbe`, `__padelSceneProbe`,
+`__gameProbe`, `__GAME_READY__`) están siempre activos. Los hooks que
+**fuerzan estado** (`__padelTest*`, `__padelWin`, `__padelGold`,
+`__padelFX`) solo se registran en desarrollo o si la URL lleva
+`?hooks=1` (la batería E2E navega así).
+
+Que quede claro: **esto es una política de depuración, no una medida
+de seguridad.** Evita la activación accidental, pero cualquiera puede
+añadir `?hooks=1` a la URL y usar los hooks para, por ejemplo,
+ganarse monedas sin jugar. Es aceptable porque el juego es 100 %
+local, sin servidor ni cuentas: esas monedas viven en el navegador
+del propio jugador y no tienen ningún valor fuera de él. Si algún día
+hubiera un servidor o recompensas reales, esta política no valdría.
 
 ## Despliegue
 
-- **Vercel (previsto):** `vercel.json` en la raíz — framework `vite`,
-  `buildCommand: npm run build`, `outputDirectory: dist`, sin
-  variables de entorno. No hacen falta rewrites: es una SPA de una
-  sola vista sin rutas (la escena y los paneles viven en la misma
-  página).
-- **Render (alternativa documentada):** `render.yaml` (Static Site)
-  con `buildCommand: npm ci && npm run build` y
-  `staticPublishPath: ./dist`, sin fallback SPA por paridad con el
-  original.
+- **Vercel (la plataforma elegida; verificado):**
+  https://padel-3d-replica.vercel.app — `vercel.json` en la raíz:
+  framework `vite`, `buildCommand: npm run build`,
+  `outputDirectory: dist`, sin variables de entorno. No hacen falta
+  rewrites: es una SPA de una sola vista sin rutas (la escena y los
+  paneles viven en la misma página). Cada push a `main` redespliega.
+- **Render (alternativa NO verificada):** queda un `render.yaml`
+  (Static Site) como alternativa documentada; no se ha desplegado ni
+  verificado en Render y no forma parte de los requisitos del
+  proyecto.
 
 ## Stack
 
-Vite 7 · React 19.3.1 · TypeScript 5.9 · Three.js r180 · Vitest 3.
-Sin backend: todo el estado vive en localStorage con el esquema de
-la SPEC §4.
+Vite 7 · React 19.3.1 · TypeScript 5.9 · Three.js r180 · Vitest 4 ·
+Playwright 1.63 (solo E2E, dev). Sin backend: todo el estado vive en
+localStorage con el esquema de la SPEC §4.

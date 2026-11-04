@@ -258,6 +258,15 @@ export class AIBrain {
     return horizontal <= 1.75 && ball.pos.y >= 0.12 && ball.pos.y <= 2.45 && this.sideSign * ball.pos.z >= -0.4;
   }
 
+  /**
+   * True cuando el tiempo de reacción (aiReaction) ya se cumplió para
+   * el golpe contrario en curso y el cerebro ha decidido (Fase 8 · A2):
+   * el orquestador solo puede dejar golpear a la IA en este estado.
+   */
+  get hasDecided(): boolean {
+    return this.decided;
+  }
+
   /** Tirada de error: true si este golpe se erra (aiError + pared). */
   rollError(afterWall: boolean): boolean {
     const p = this.level.aiError + (afterWall ? this.level.aiWallError : 0);

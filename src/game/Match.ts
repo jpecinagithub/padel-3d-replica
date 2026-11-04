@@ -47,7 +47,8 @@ import { BALL_PHYSICS, Ball, vec3, type BallEvent, type Vec3 } from './Ball';
 import type { AudioProbe, SoundEvent } from './Audio';
 import type { CareerStatus } from './Career';
 import { COURT } from './courtConstants';
-import { InputManager } from './Input';
+import { guidesFor } from './guides';
+import { InputManager, moveVector } from './Input';
 import { MatchFlow, type MatchSummary } from './MatchFlow';
 import { PlayerFigure, type AnimState } from './Player';
 import { ReplayPlayer, ReplayRecorder } from './Replay';
@@ -142,6 +143,14 @@ export interface MatchContext {
   onEffect: (kind: 'win' | 'gold', at?: Vec3) => void;
   /** Fin de partido: se llama una sola vez, con el resumen completo. */
   onMatchEnd: (summary: MatchSummary) => void;
+  /**
+   * Petición de partido nuevo desde dentro del motor (tecla R al final
+   * de un partido; Fase 8 · A4): la app la atiende creando/manteniendo
+   * el run de carrera antes de arrancar, igual que los botones de la
+   * pantalla de fin. Sin este callback, R arrancaba un partido «suelto»
+   * sin carrera y ganar la ronda no avanzaba.
+   */
+  onRequestNewMatch?: () => void;
   /** Dispara un sonido sintetizado (Audio.ts, en la escena). */
   onSound: (event: SoundEvent) => void;
   /** Probe del motor de audio para __padelProbe. */
@@ -226,6 +235,8 @@ export class Match {
   // Repetición del último punto (Fase 5)
   private readonly recorder = new ReplayRecorder();
   private readonly replayPlayer = new ReplayPlayer();
+  /** La repetición automática de este punto ya se ofreció (M4: una por punto). */
+  private autoReplayDone = false;
   private replayRoles: Role[] = [];
   private replaySnapshot: { ball: Vec3; positions: Partial<Record<Role, { x: number; z: number }>> } | null = null;
 
@@ -419,6 +430,10 @@ export class Match {
       opponentLevel: career.opponentLevel,
       modeId: career.mode.id,
       isCareerFinal: career.active ? career.isFinal : true,
+      // M3: el modo y la ronda quedan CERRADOS en el resumen de este
+      // partido; la pantalla de fin no debe leer la carrera ya avanzada.
+      modeName: career.mode.name,
+      roundName: career.active ? career.roundName : '',
     });
     this.aiHits = 0;
     this.faults = 0;
@@ -685,6 +700,11 @@ export class Match {
     if (!brain || this.ball.state !== 'flying' || this.serveInFlight) return;
     if (this.lastHitTeam === actor.team) return;
     if (actor.cooldown > 0 || actor.lastAttemptBall === this.ballId) return;
+    // Fase 8 · A2: sin decisión no hay golpe. La bola puede estar ya en
+    // alcance geométrico mientras el cerebro sigue «reaccionando»
+    // (p. ej. quedó junto a él al rebotar en su cristal): golpear ahí
+    // devolvía antes de tiempo, con decisionMs aún a null.
+    if (!brain.hasDecided) return;
     const bp = this.ball.pos;
     if (!brain.inReach(snapshotOf(this.ball))) return;
 
@@ -742,6 +762,7 @@ export class Match {
   private endRally(winnerTeam: AITeam, cause: string): void {
     if (this.phase === 'ended' || this.phase === 'match-over') return;
     this.phase = 'ended';
+    this.autoReplayDone = false; // punto nuevo: la repetición automática puede ofrecerse
     this.winner = winnerTeam;
     this.lastCause = cause;
     this.message = cause;
@@ -885,7 +906,11 @@ export class Match {
         }
         if (sideTeam === hitter) {
           this.endRally(receiver, hitter === 'human' ? 'Contra tu propio cerramiento: fuera' : 'La IA se dio contra su cerramiento');
-        } else if (bouncesThere === 0 && event.where !== 'side') {
+        } else if (bouncesThere === 0) {
+          // Fase 8 · A3: TAMBIÉN los cerramientos laterales (cristal o
+          // malla) resuelven el punto si la bola llega directa sin
+          // botar; antes el `where !== 'side'` los dejaba en juego y
+          // el rally seguía tras un golpe que ya era «fuera».
           this.endRally(receiver, hitter === 'human' ? 'Directa al cerramiento sin botar: fuera' : 'La IA la mandó directa al cerramiento');
         } else {
           this.wallByTeam[sideTeam] = true;
@@ -957,6 +982,14 @@ export class Match {
     const surface = surfaceById(settings.courtType);
     const level = playerLevelById(settings.playerLevel);
 
+    // Fase 8 · M4: «Repeticiones: Sí» = repetición automática breve
+    // tras cada punto (una sola vez por punto), además de la manual
+    // con V. Solo en la pausa de fin de punto, no sobre el panel final.
+    if (this.phase === 'ended' && !this.autoReplayDone) {
+      this.autoReplayDone = true;
+      if (guidesFor(settings).autoReplay) this.startReplay();
+    }
+
     for (const actor of this.actors) actor.cooldown = Math.max(0, actor.cooldown - dt);
 
     // ---- Saque ----
@@ -1007,8 +1040,15 @@ export class Match {
     if (this.input.consumePressed('KeyR') && this.phase !== 'serve-ready') {
       // R repite el saque del punto en curso (el punto ya anotado no se
       // deshace: en 'ended' equivale a avanzar, y en 'match-over' es revancha).
-      if (this.phase === 'match-over') this.startMatch();
-      else if (this.phase === 'ended') this.advanceAfterPoint();
+      if (this.phase === 'match-over') {
+        // Fase 8 · A4: la revancha pasa por la app, que crea/mantiene
+        // el run de carrera (startCareerRun) antes de arrancar — el
+        // mismo flujo que el botón de la pantalla de fin. Antes R
+        // llamaba a startMatch() directo y el partido quedaba «suelto»:
+        // sin run, ganar la semifinal no avanzaba la carrera.
+        if (this.ctx.onRequestNewMatch) this.ctx.onRequestNewMatch();
+        else this.startMatch();
+      } else if (this.phase === 'ended') this.advanceAfterPoint();
       else this.setupServe();
     }
 
@@ -1018,13 +1058,14 @@ export class Match {
       const ax = this.input.axisX();
       const az = this.input.axisZ();
       if (ax !== 0 || az !== 0) {
-        const len = Math.hypot(ax, az);
+        // M2: moveVector conserva la magnitud analógica del joystick.
+        const mv = moveVector(ax, az);
         const p = this.human.figure.pos;
-        const nx = Math.min(4.55, Math.max(-4.55, p.x + ((ax / len) * level.speed) * dt));
-        const nz = Math.min(-0.35, Math.max(-9.55, p.z + ((az / len) * level.speed) * dt));
+        const nx = Math.min(4.55, Math.max(-4.55, p.x + mv.x * level.speed * dt));
+        const nz = Math.min(-0.35, Math.max(-9.55, p.z + mv.z * level.speed * dt));
         this.human.figure.setPosition(nx, nz);
-        this.playerSpeed = level.speed;
-        speedRatio = 1;
+        speedRatio = Math.hypot(mv.x, mv.z);
+        this.playerSpeed = level.speed * speedRatio;
       } else {
         this.playerSpeed = 0;
       }

@@ -32,6 +32,13 @@ export interface MatchFlowConfig {
   modeId: number;
   /** True si este partido es la ronda final de una carrera (o no hay carrera). */
   isCareerFinal: boolean;
+  /**
+   * Nombre del modo y de la ronda TAL COMO SE JUGARON (Fase 8 · M3):
+   * se fijan al empezar el partido y viajan en el resumen cerrado, para
+   * que la pantalla de fin no lea la carrera ya avanzada.
+   */
+  modeName?: string;
+  roundName?: string;
 }
 
 export interface CoinsBreakdown {
@@ -53,6 +60,10 @@ export interface MatchSummary {
   winnerSide: Side;
   modeId: number;
   opponentLevel: number;
+  /** Nombre del modo jugado (cerrado al empezar el partido; M3). */
+  modeName?: string;
+  /** Nombre de la ronda jugada ('' en Partida rápida; cerrado; M3). */
+  roundName?: string;
   /** Marcador final de juegos [tú, rival] (el tiebreak cuenta como juego). */
   games: [number, number];
   tiebreakPlayed: boolean;
@@ -170,6 +181,8 @@ export class MatchFlow {
         winnerSide: side,
         modeId: this.cfg.modeId,
         opponentLevel: this.cfg.opponentLevel,
+        modeName: this.cfg.modeName,
+        roundName: this.cfg.roundName,
         games: [snap.games[0], snap.games[1]],
         tiebreakPlayed: this.tiebreakPlayed || snap.tiebreak,
         pointsWonByHuman: this.humanPoints,

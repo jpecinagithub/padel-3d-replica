@@ -38,7 +38,14 @@ export const DEFAULT_SETTINGS: Settings = {
   camera: 0,
   mode: 0,
   replays: 0,
-  assist: 0,
+  // Fase 8 (M4): las ayudas pasan a tener efecto real (guías visuales).
+  // El original guarda assist:0 por defecto pero su menú mostraba
+  // «Ayudas: sí» con los ajustes por defecto (análisis visual, Fase A)
+  // y la semántica interna del valor no es observable en el bundle
+  // ([DESC] en INFORME_REA): decisión propia documentada en
+  // REGLAMENTO.md — por defecto «Sí» para no cambiar la experiencia
+  // que la réplica ya tenía (aguja, mensajes y medidor visibles).
+  assist: 1,
   playerCharacter: 0,
 };
 
@@ -96,10 +103,59 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Saneamiento de persistidos (Fase 8 · C2): cada campo se valida por
+ * tipo y rango; lo inválido cae al valor por defecto, nunca pasa «tal
+ * cual» al estado. Antes settings se fusionaba sin validar, stats
+ * aceptaba negativos/decimales y run aceptaba cualquier mode>0 y
+ * cualquier round sin cota.
+ */
+function intInRange(value: unknown, min: number, max: number, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+function boolOr(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function nonNegativeInt(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.floor(value));
+}
+
+/** Settings completos saneados a partir de un objeto crudo (posiblemente corrupto). */
+export function sanitizeSettings(raw: Record<string, unknown>): Settings {
+  const d = DEFAULT_SETTINGS;
+  return {
+    courtType: intInRange(raw.courtType, 0, 3, d.courtType),
+    playerLevel: intInRange(raw.playerLevel, 0, 2, d.playerLevel),
+    opponentLevel: intInRange(raw.opponentLevel, 0, 2, d.opponentLevel),
+    doubles: boolOr(raw.doubles, d.doubles),
+    crowd: boolOr(raw.crowd, d.crowd),
+    ambience: intInRange(raw.ambience, 0, 2, d.ambience),
+    camera: intInRange(raw.camera, 0, 2, d.camera),
+    mode: intInRange(raw.mode, 0, 2, d.mode),
+    replays: intInRange(raw.replays, 0, 1, d.replays),
+    assist: intInRange(raw.assist, 0, 1, d.assist),
+    playerCharacter: nonNegativeInt(raw.playerCharacter, d.playerCharacter),
+  };
+}
+
+/** Parche de settings saneado: solo claves presentes y ya validadas. */
+function sanitizeSettingsPatch(patch: Partial<Settings>): Partial<Settings> {
+  const full = sanitizeSettings({ ...DEFAULT_SETTINGS, ...patch });
+  const clean: Partial<Settings> = {};
+  for (const key of Object.keys(patch) as (keyof Settings)[]) {
+    (clean as Record<string, unknown>)[key] = full[key];
+  }
+  return clean;
+}
+
 function loadSettings(storage: StorageLike | null): Settings {
   const raw = readJSON(storage, SETTINGS_KEY);
   if (!isRecord(raw)) return { ...DEFAULT_SETTINGS };
-  return { ...DEFAULT_SETTINGS, ...raw } as Settings;
+  return sanitizeSettings(raw);
 }
 
 function loadWallet(storage: StorageLike | null): Wallet {
@@ -114,22 +170,26 @@ function loadWallet(storage: StorageLike | null): Wallet {
 function loadStats(storage: StorageLike | null): Stats {
   const raw = readJSON(storage, STATS_KEY);
   if (!isRecord(raw)) return { ...DEFAULT_STATS };
-  // Fusión sobre los ceros: un stats parcial conserva los campos que trae.
+  // Fusión saneada sobre los ceros: enteros ≥ 0; lo demás cae a 0.
   const merged = { ...DEFAULT_STATS };
   for (const key of Object.keys(DEFAULT_STATS) as (keyof Stats)[]) {
-    const value = raw[key];
-    if (typeof value === 'number' && Number.isFinite(value)) merged[key] = value;
+    merged[key] = nonNegativeInt(raw[key], 0);
   }
   return merged;
 }
 
 function loadRun(storage: StorageLike | null): RunState | null {
   const raw = readJSON(storage, RUN_KEY);
-  // Solo es válido si mode es un número > 0 (Torneo o Mundial); si no, null.
+  // Solo tienen carrera Torneo (1) y Mundial (2); cualquier otro mode
+  // (o un round fuera de las rondas del modo) se descarta/sanea (C2).
   if (!isRecord(raw)) return null;
-  if (typeof raw.mode !== 'number' || !(raw.mode > 0)) return null;
-  const round = typeof raw.round === 'number' && raw.round >= 0 ? raw.round : 0;
-  return { ...raw, mode: raw.mode, round } as RunState;
+  if (raw.mode !== 1 && raw.mode !== 2) return null;
+  const rounds = raw.mode === 1 ? 2 : 3; // rondas por modo (state/modes)
+  const run: RunState = { mode: raw.mode, round: intInRange(raw.round, 0, rounds - 1, 0) };
+  if (typeof raw.baseLevel === 'number' && Number.isFinite(raw.baseLevel)) {
+    run.baseLevel = intInRange(raw.baseLevel, 0, 2, 0);
+  }
+  return run;
 }
 
 function loadMuted(storage: StorageLike | null): boolean {
@@ -182,7 +242,7 @@ export class GameStore {
   }
 
   updateSettings(patch: Partial<Settings>): void {
-    this.state = { ...this.state, settings: { ...this.state.settings, ...patch } };
+    this.state = { ...this.state, settings: { ...this.state.settings, ...sanitizeSettingsPatch(patch) } };
     this.persist(SETTINGS_KEY, this.state.settings);
     this.emit();
   }
@@ -220,12 +280,16 @@ export class GameStore {
 
   setRun(run: RunState | null): void {
     this.state = { ...this.state, run };
-    if (!this.storage) return;
-    try {
-      if (run === null) this.storage.removeItem(RUN_KEY);
-      else this.storage.setItem(RUN_KEY, JSON.stringify(run));
-    } catch {
-      // Igual que persist(): sin almacenamiento, el estado vive en memoria.
+    // Fase 8 · M6: la notificación va SIEMPRE, también sin
+    // almacenamiento (antes el `return` temprano la saltaba y la UI
+    // no se enteraba de los cambios de carrera en ese modo).
+    if (this.storage) {
+      try {
+        if (run === null) this.storage.removeItem(RUN_KEY);
+        else this.storage.setItem(RUN_KEY, JSON.stringify(run));
+      } catch {
+        // Igual que persist(): sin almacenamiento, el estado vive en memoria.
+      }
     }
     this.emit();
   }

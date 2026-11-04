@@ -26,7 +26,7 @@ import type { Settings } from '../state/store';
 import { BALL_PHYSICS, Ball, vec3, type BallEvent, type Vec3 } from './Ball';
 import type { AudioProbe, SoundEvent } from './Audio';
 import { COURT } from './courtConstants';
-import { InputManager } from './Input';
+import { InputManager, moveVector } from './Input';
 import { PlayerFigure } from './Player';
 import {
   canHitBall,
@@ -481,15 +481,16 @@ export class Training {
       const ax = this.input.axisX();
       const az = this.input.axisZ();
       if (ax !== 0 || az !== 0) {
-        const len = Math.hypot(ax, az);
-        const vx = (ax / len) * level.speed;
-        const vz = (az / len) * level.speed;
+        // M2: la magnitud analógica del joystick se conserva.
+        const mv = moveVector(ax, az);
+        const vx = mv.x * level.speed;
+        const vz = mv.z * level.speed;
         const p = this.playerFigure.pos;
         const nx = Math.min(4.55, Math.max(-4.55, p.x + vx * dt));
         const nz = Math.min(-0.35, Math.max(-9.55, p.z + vz * dt));
         this.playerFigure.setPosition(nx, nz);
-        this.playerSpeed = level.speed;
-        speedRatio = 1;
+        speedRatio = Math.hypot(mv.x, mv.z);
+        this.playerSpeed = level.speed * speedRatio;
       } else {
         this.playerSpeed = 0;
       }

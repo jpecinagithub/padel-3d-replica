@@ -72,6 +72,13 @@ export interface AudioProbe {
   ctxState: string;
   muted: boolean;
   crowdActive: boolean;
+  /**
+   * Estado REAL de los nodos de grada (Fase 8 · M1): true solo si la
+   * cadena de nodos existe de verdad en el grafo (no un flag lógico).
+   */
+  crowdNodesCreated: boolean;
+  /** True si la fuente y el LFO de la grada recibieron start(). */
+  crowdStarted: boolean;
   /** Voces one-shot sonando ahora mismo (capa de nodos). */
   voices: number;
 }
@@ -120,6 +127,8 @@ export class GameAudio {
   private muted = false;
   private voices = 0;
   private crowdNodes: { source: AudioBufferSourceNode; gain: GainNode; lfo: OscillatorNode } | null = null;
+  /** La fuente de la grada recibió start() de verdad (Fase 8 · M1). */
+  private crowdStartedFlag = false;
   private readonly createContext: () => AudioContext | null;
 
   constructor(options: AudioOptions = {}) {
@@ -190,6 +199,8 @@ export class GameAudio {
       ctxState: this.ctx ? this.ctx.state : 'none',
       muted: this.muted,
       crowdActive: this.crowdActive,
+      crowdNodesCreated: this.crowdNodes !== null,
+      crowdStarted: this.crowdStartedFlag,
       voices: this.voices,
     };
   }
@@ -208,11 +219,17 @@ export class GameAudio {
     this.counts.crowd += 1;
     this.crowdPending = true;
     this.ensureCtx();
+    // Fase 8 · M1: con el contexto YA creado, ensureCtx() no vuelve a
+    // pasar por la rama que construía la grada y los nodos nunca
+    // nacían (el público figuraba «activo» sin sonar). Se construye
+    // explícitamente aquí; buildCrowd es idempotente.
+    this.buildCrowd();
     return true;
   }
 
   stopCrowd(): void {
     this.crowdPending = false;
+    this.crowdStartedFlag = false;
     if (!this.ctx || !this.crowdNodes) {
       this.crowdNodes = null;
       return;
@@ -254,6 +271,9 @@ export class GameAudio {
     source.start();
     lfo.start();
     this.crowdNodes = { source, gain, lfo };
+    this.crowdStartedFlag = true;
+    // Los nodos existen de verdad: ya no es una intención pendiente.
+    this.crowdPending = false;
   }
 
   // ------------------------------------------------------------ disparo

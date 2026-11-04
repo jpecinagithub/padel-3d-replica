@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CAMERA_NAMES, type CameraKind } from '../game/cameraMath';
 import type { CareerStatus, SettleOutcome } from '../game/Career';
+import { guidesFor } from '../game/guides';
 import type { MatchProbe } from '../game/Match';
 import type { MatchSummary } from '../game/MatchFlow';
 import type { PlayProbe } from '../game/PadelScene';
@@ -99,6 +100,7 @@ export function CourtView({
   }, [getProbe]);
 
   const match = isMatchProbe(probe) ? probe : null;
+  const guides = guidesFor(settings);
   const phase = probe?.rally.state ?? 'serve-ready';
   const needle = probe?.serve.needle ?? null;
   const needlePct = needle === null ? null : needle * 100;
@@ -123,6 +125,34 @@ export function CourtView({
       : outcome?.careerOver && match?.match.winner === 'ai'
         ? `Reintentar ${career.mode.name} ▶`
         : 'Revancha ▶';
+  // Fase 8 · M3: la pantalla de fin describe el partido TERMINADO con
+  // los datos cerrados del resumen (modo y ronda jugados), no con la
+  // carrera viva, que para entonces ya avanzó a la siguiente ronda.
+  const endSummary = endInfo?.summary ?? null;
+  const endModeRound = endSummary
+    ? `${endSummary.modeName ?? career.mode.name}${endSummary.roundName ? ` (${endSummary.roundName})` : ''}`
+    : career.active
+      ? `${career.mode.name} (${career.roundName})`
+      : 'Partida rápida';
+
+  // Fase 8 · C5: gestión de foco de los paneles modales (pausa y fin de
+  // partido): al abrirse, el foco va a su primer botón; al cerrarse,
+  // vuelve a donde estaba.
+  const pausePanelRef = useRef<HTMLDivElement>(null);
+  const endPanelRef = useRef<HTMLDivElement>(null);
+  const prevFocusRef = useRef<Element | null>(null);
+  const pauseOpen = paused && !matchOver;
+  useEffect(() => {
+    if (pauseOpen || matchOver) {
+      if (!prevFocusRef.current) prevFocusRef.current = document.activeElement;
+      const panel = matchOver ? endPanelRef.current : pausePanelRef.current;
+      panel?.querySelector('button')?.focus();
+    } else if (prevFocusRef.current) {
+      const prev = prevFocusRef.current as HTMLElement;
+      prevFocusRef.current = null;
+      if (typeof prev.focus === 'function') prev.focus();
+    }
+  }, [pauseOpen, matchOver]);
 
   return (
     <div className="court-hud" aria-label={match ? 'Partido contra la IA' : 'Entrenamiento en pista'}>
@@ -130,7 +160,7 @@ export function CourtView({
         <div className="hud-chips">
           {match ? (
             <>
-              <span className="hud-chip">{modeTitle} · v1.0.0</span>
+              <span className="hud-chip">{modeTitle} · v1.1.0</span>
               <span className="hud-chip hud-chip-opt">Saca: {SERVER_LABEL[match.match.server]}</span>
               <span className="hud-chip hud-chip-opt">
                 IA {aiLevelName}: {AI_STATE_LABEL[match.ai.state]}
@@ -205,7 +235,7 @@ export function CourtView({
         )}
         {probe?.rally.message && <p className="hud-message">{probe.rally.message}</p>}
 
-        {phase === 'serve-toss' && needlePct !== null && humanServing && (
+        {phase === 'serve-toss' && needlePct !== null && humanServing && guides.needle && (
           <div className="needle-gauge" role="img" aria-label="Aguja del saque">
             <div className="needle-track">
               <div className="needle-sweet" />
@@ -232,9 +262,11 @@ export function CourtView({
                   {match.score.games[0]}–{match.score.games[1]} · golpes de la IA: {match.match.aiHits}
                 </p>
                 <p className="rally-cause">{probe.rally.lastCause}</p>
-                <p className="rally-next">
-                  ESPACIO: siguiente saque (saca {SERVER_LABEL[match.match.server]}) · V: repetición
-                </p>
+                {guides.help && (
+                  <p className="rally-next">
+                    ESPACIO: siguiente saque (saca {SERVER_LABEL[match.match.server]}) · V: repetición
+                  </p>
+                )}
               </>
             ) : (
               <>
@@ -243,7 +275,7 @@ export function CourtView({
                   {probe.rally.lastShot ? ` · último: ${probe.rally.lastShot}` : ''}
                 </p>
                 <p className="rally-cause">{probe.rally.lastCause}</p>
-                <p className="rally-next">ESPACIO o R: siguiente saque (lado contrario)</p>
+                {guides.help && <p className="rally-next">ESPACIO o R: siguiente saque (lado contrario)</p>}
               </>
             )}
           </div>
@@ -252,16 +284,18 @@ export function CourtView({
 
       <div className="hud-bottom">
         <div className="hud-meters">
-          <div className="meter" aria-label="Medidor de supergolpe">
-            <span className="meter-label">SUPERGOLPE</span>
-            <div className="meter-track">
-              <div
-                className={`meter-fill${probe?.super.ready ? ' meter-ready' : ''}`}
-                style={{ width: `${superPct}%` }}
-              />
+          {guides.superMeter && (
+            <div className="meter" aria-label="Medidor de supergolpe">
+              <span className="meter-label">SUPERGOLPE</span>
+              <div className="meter-track">
+                <div
+                  className={`meter-fill${probe?.super.ready ? ' meter-ready' : ''}`}
+                  style={{ width: `${superPct}%` }}
+                />
+              </div>
+              <span className="meter-value">{probe?.super.ready ? '¡LISTO! (bola alta + W)' : `${superPct}%`}</span>
             </div>
-            <span className="meter-value">{probe?.super.ready ? '¡LISTO! (bola alta + W)' : `${superPct}%`}</span>
-          </div>
+          )}
           <span className="hud-chip">🎾 {speedKmh} km/h</span>
           {match ? (
             <>
@@ -277,15 +311,17 @@ export function CourtView({
         </div>
         <p className="hud-label">
           {match
-            ? `${modeTitle} · v1.0.0 — marcador oficial (15/30/40, juegos y set), audio sintetizado y táctil${
+            ? `${modeTitle} · v1.1.0 — marcador oficial (15/30/40, juegos y set), audio sintetizado y táctil${
                 settings.doubles ? ' · dobles' : ''
               }; las monedas se abonan al cerrar el partido`
             : 'Entrenamiento · Fase 3 — saque con aguja y rally libre sin marcador'}
         </p>
-        <p className="hud-help">
-          WASD/flechas moverte · ESPACIO/clic golpear y sacar · W potente · S dejada · W+E globo ·
-          Q cortado · E liftado · C cámara · V repetición · R reiniciar · M sonido · ESC pausa
-        </p>
+        {guides.help && (
+          <p className="hud-help">
+            WASD/flechas moverte · ESPACIO/clic golpear y sacar · W potente · S dejada · W+E globo ·
+            Q cortado · E liftado · C cámara · V repetición · R reiniciar · M sonido · ESC pausa
+          </p>
+        )}
         <button type="button" className="btn btn-small hud-btn" onClick={onCycleCamera}>
           Cambiar cámara (C)
         </button>
@@ -304,7 +340,7 @@ export function CourtView({
 
       {matchOver && match && (
         <div className="pause-overlay">
-          <div className="pause-panel end-panel">
+          <div className="pause-panel end-panel" ref={endPanelRef}>
             <h2>
               {match.match.champion
                 ? `🏆 ¡CAMPEÓN DEL ${career.mode.name.toUpperCase()}!`
@@ -314,7 +350,7 @@ export function CourtView({
             </h2>
             <p className="end-score">
               Juegos: {match.score.games[0]} — {match.score.games[1]}
-              {career.active ? ` · ${career.mode.name} (${career.roundName})` : ' · Partida rápida'}
+              {` · ${endModeRound}`}
             </p>
             <div className="end-breakdown">
               <p>
@@ -360,7 +396,7 @@ export function CourtView({
 
       {paused && !matchOver && (
         <div className="pause-overlay">
-          <div className="pause-panel">
+          <div className="pause-panel" ref={pausePanelRef}>
             <h2>Pausa</h2>
             <button type="button" className="btn btn-primary" onClick={onResume}>
               Continuar

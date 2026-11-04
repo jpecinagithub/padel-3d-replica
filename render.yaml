@@ -1,0 +1,20 @@
+# Deploy de la réplica en Render (Static Site), según REPLICA_SPEC §6.
+services:
+  - type: web
+    name: padel-replica
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    routes:
+      # DECISIÓN (SPEC §6): el original NO tiene fallback SPA (una ruta
+      # desconocida devuelve 404 «Not Found»). Esta réplica es de una sola
+      # ruta, así que se mantiene la PARIDAD: no se añade rewrite.
+      # Si en una fase futura se añade React Router, descomentar esto sería
+      # la mejora recomendada:
+      # - type: rewrite
+      #   source: /*
+      #   destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable

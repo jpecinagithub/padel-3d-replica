@@ -1,0 +1,818 @@
+/* Estilos a mano de la réplica (sin framework CSS, como el original).
+   Paleta: fondo azul noche #0a1020, panel oscuro translúcido, acento lima. */
+
+:root {
+  --bg: #0a1020;
+  --panel: rgba(13, 21, 40, 0.94);
+  --panel-border: rgba(255, 255, 255, 0.09);
+  --text: #f2f5fa;
+  --muted: #9fb0c3;
+  --lime: #b6f09c;
+  --lime-strong: #a8e10c;
+  --chip: rgba(70, 110, 180, 0.28);
+  --danger: #e06c5a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 110%, rgba(29, 78, 158, 0.35), transparent),
+    radial-gradient(ellipse 60% 40% at 50% -10%, rgba(168, 225, 12, 0.07), transparent),
+    var(--bg);
+}
+
+.app-shell {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28px 16px 48px;
+}
+
+/* ---- Escena 3D de fondo (Fase 2) ---- */
+
+.scene-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--bg);
+}
+
+.scene-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.scene-canvas canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* Velo oscuro sobre la escena para que los paneles se lean bien. */
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(ellipse 90% 70% at 50% 40%, rgba(6, 10, 20, 0.36), rgba(6, 10, 20, 0.66));
+}
+
+/* ---- Vista de pista (HUD mínimo) ---- */
+
+.court-hud {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  touch-action: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.hud-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Selector de modo de juego (Fase 4): entrenamiento o partido libre. */
+.mode-selector {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.hud-chip {
+  background: rgba(13, 21, 40, 0.82);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-weight: 700;
+}
+
+.hud-btn {
+  pointer-events: auto;
+}
+
+.hud-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-label {
+  margin: 0;
+  background: rgba(13, 21, 40, 0.82);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 700;
+}
+
+.hud-help {
+  margin: 0;
+  color: var(--text);
+  background: rgba(13, 21, 40, 0.66);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 0.85rem;
+}
+
+.hud-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.hud-message {
+  margin: 0;
+  background: rgba(13, 21, 40, 0.85);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 10px 22px;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+/* Aguja del saque: zona buena ±18% y punto dulce ±7% en torno al centro. */
+.needle-gauge {
+  width: min(520px, 80vw);
+  pointer-events: none;
+}
+
+.needle-track {
+  position: relative;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(13, 21, 40, 0.9);
+  border: 1px solid var(--panel-border);
+  overflow: hidden;
+}
+
+.needle-good {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 32%;
+  width: 36%;
+  background: rgba(240, 192, 64, 0.35);
+}
+
+.needle-sweet {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 43%;
+  width: 14%;
+  background: rgba(64, 200, 120, 0.75);
+}
+
+.needle-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 5px;
+  margin-left: -2.5px;
+  border-radius: 3px;
+  background: #f5f7ff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+}
+
+.needle-caption {
+  margin: 8px 0 0;
+  text-align: center;
+  font-weight: 700;
+  background: rgba(13, 21, 40, 0.75);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+
+.rally-summary {
+  background: rgba(13, 21, 40, 0.88);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 14px 24px;
+  text-align: center;
+}
+
+.rally-summary p {
+  margin: 4px 0;
+}
+
+.rally-cause {
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.rally-next {
+  opacity: 0.85;
+  font-size: 0.9rem;
+}
+
+.hud-meters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(13, 21, 40, 0.82);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.meter-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.meter-track {
+  width: 130px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f0c040, #e0521f);
+  transition: width 0.15s ease-out;
+}
+
+.meter-fill.meter-ready {
+  background: #40c878;
+}
+
+.meter-value {
+  font-size: 0.8rem;
+  font-weight: 700;
+  min-width: 34px;
+}
+
+.pause-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 16, 0.55);
+  pointer-events: auto;
+}
+
+.pause-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  padding: 26px 30px;
+  min-width: 260px;
+  text-align: center;
+}
+
+.pause-panel h2 {
+  margin: 0 0 6px;
+}
+
+.panel {
+  width: min(680px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  padding: 26px 26px 30px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.wallet {
+  font-size: 1.05rem;
+  font-weight: 700;
+  background: var(--chip);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.icon-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.game-title {
+  text-align: center;
+  font-size: clamp(2.6rem, 9vw, 4.2rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  margin: 10px 0 0;
+  text-transform: uppercase;
+}
+
+.game-title .accent {
+  color: var(--lime-strong);
+}
+
+.replica-subtitle {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 2px 0 6px;
+}
+
+.tagline {
+  text-align: center;
+  color: var(--muted);
+  margin: 4px 0 18px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 14px 0 22px;
+}
+
+.chip {
+  background: var(--chip);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-primary {
+  background: var(--lime-strong);
+  border-color: var(--lime-strong);
+  color: #101604;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.btn-primary:hover {
+  background: var(--lime);
+}
+
+.btn-small {
+  width: auto;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.screen-title {
+  font-size: 1.6rem;
+  margin: 6px 0 4px;
+  text-align: center;
+}
+
+.screen-note {
+  color: var(--muted);
+  text-align: center;
+  margin: 0 0 18px;
+  font-size: 0.95rem;
+}
+
+.help-block {
+  margin-top: 22px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.stats-line {
+  margin-top: 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ---- Personalizar ---- */
+
+.option-group {
+  margin-bottom: 18px;
+}
+
+.option-group h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.seg-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.seg-btn {
+  flex: 1 1 auto;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.seg-btn small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.seg-btn.active {
+  background: var(--lime-strong);
+  border-color: var(--lime-strong);
+  color: #101604;
+  font-weight: 700;
+}
+
+.seg-btn.active small {
+  color: rgba(16, 22, 4, 0.75);
+}
+
+/* ---- Tienda ---- */
+
+.shop-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.shop-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.shop-card.equipped {
+  border-color: var(--lime-strong);
+}
+
+.swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.shop-card h4 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.item-effect {
+  color: var(--muted);
+  font-size: 0.82rem;
+  min-height: 1.1em;
+}
+
+.item-price {
+  font-weight: 700;
+}
+
+.item-price .free {
+  color: var(--lime);
+}
+
+.cant-afford {
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+.shop-feedback {
+  text-align: center;
+  min-height: 1.4em;
+  margin: 14px 0 4px;
+  color: var(--lime);
+}
+
+.construction-icon {
+  font-size: 3rem;
+  text-align: center;
+  margin: 12px 0 4px;
+}
+
+/* ---- Fase 5: marcador oficial, fin de partido y repetición ---- */
+
+.scoreboard {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px auto 0;
+  width: fit-content;
+  max-width: 96vw;
+}
+
+.score-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(13, 21, 40, 0.88);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 6px 14px;
+}
+
+.score-side.serving {
+  border-color: var(--lime);
+}
+
+.score-name {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  font-size: 0.85rem;
+}
+
+.score-games {
+  font-size: 1.7rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.score-points {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--lime);
+  min-width: 2.2ch;
+  text-align: center;
+}
+
+.score-ball {
+  font-size: 0.95rem;
+}
+
+.score-mid {
+  display: flex;
+  align-items: center;
+}
+
+.score-set {
+  font-size: 0.8rem;
+  opacity: 0.85;
+  background: rgba(13, 21, 40, 0.75);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.score-badge {
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  background: #31456e;
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+.score-gold {
+  background: #8a6d1d;
+  color: #ffe98a;
+}
+
+.replay-badge {
+  display: inline-block;
+  background: rgba(120, 30, 40, 0.9);
+  border: 1px solid #ff8f9d;
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  padding: 6px 16px;
+}
+
+.end-panel {
+  min-width: min(430px, 92vw);
+}
+
+.end-score {
+  text-align: center;
+  font-weight: 700;
+  margin: 4px 0 10px;
+}
+
+.end-breakdown {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.end-breakdown p {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 5px 0;
+}
+
+.end-breakdown .end-total {
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+  margin-top: 8px;
+  font-size: 1.05rem;
+}
+
+.end-note {
+  text-align: center;
+  opacity: 0.9;
+  margin: 6px 0 10px;
+}
+
+/* ---- Fase 6: controles táctiles (solo dispositivos táctiles) ---- */
+
+.touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.touch-joystick {
+  position: absolute;
+  left: 20px;
+  bottom: 118px;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: rgba(13, 21, 40, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.32);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+
+.touch-actions {
+  position: absolute;
+  right: 20px;
+  bottom: 118px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.touch-actions-row {
+  display: flex;
+  gap: 12px;
+}
+
+.touch-utils {
+  position: absolute;
+  right: 16px;
+  top: 128px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.touch-btn {
+  pointer-events: auto;
+  touch-action: none;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  background: rgba(13, 21, 40, 0.55);
+  color: var(--text);
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-btn.active {
+  background: rgba(168, 225, 12, 0.5);
+  border-color: var(--lime-strong);
+}
+
+.touch-btn-hit {
+  width: 94px;
+  height: 94px;
+  font-size: 1.02rem;
+  background: rgba(168, 225, 12, 0.35);
+  border-color: rgba(182, 240, 156, 0.7);
+}
+
+.touch-btn-small {
+  width: 66px;
+  height: 66px;
+  font-size: 0.66rem;
+}
+
+.touch-util {
+  width: 48px;
+  height: 48px;
+  font-size: 1.05rem;
+}

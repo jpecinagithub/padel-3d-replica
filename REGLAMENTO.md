@@ -57,8 +57,10 @@ perfecto!») y zonas buena/floja/falta (red o larga). (SPEC §5.3/§5.6;
 `tests/shots.test.ts`.)
 
 2.2 **(a) OBSERVADO** — La IA saca con una aguja virtual: con
-probabilidad `aiServeFault` de su nivel (0,22/0,13/0,07) su saque es
-falta. (SPEC §5.1; `tests/ai.test.ts`.)
+probabilidad `aiServeFault` de su nivel (0,14/0,07/0,03) su saque es
+falta. (SPEC §5.1; código: `src/state/modes.ts`, `AI_LEVELS.aiServeFault`;
+`tests/ai.test.ts`.) *[Cifra corregida en la Ronda 2: el reglamento
+decía 0,22/0,13/0,07, que no coincidía ni con el código ni con la SPEC.]*
 
 2.3 **(b) DECISIÓN PROPIA** — UN solo saque por punto, sin segundo
 intento: si es falta, el punto es del equipo que restaba.
@@ -66,14 +68,21 @@ Simplificación deliberada de la réplica, documentada desde la Fase 1;
 el tratamiento del segundo saque en el original no consta en la SPEC.
 
 2.4 **(b) DECISIÓN PROPIA** — Saque «alto»: el lanzamiento sube hasta
-≈2,37 m y el contacto válido debe ser elevado (≥1,6 m); con contacto
+≈2,47 m y el contacto válido debe ser elevado (≥1,6 m); con contacto
 bajo el saque sale débil hacia la red. La SPEC observa la aguja, no la
-altura de contacto del original. (`Match.strikeHumanServe`.)
+altura de contacto del original. (Código: pico del lanzamiento en
+`Match.ts`/`Training.ts`, y = 1,02 + 5,35t − 4,95t² → pico ≈ 2,47 m;
+`Match.strikeHumanServe` con `MIN_SERVE_CONTACT_Y = 1,6`.)
+*[Cifra corregida en la Ronda 2: el reglamento decía ≈2,37 m.]*
 
-2.5 **(a) OBSERVADO** — El saque debe botar en el cuadro diagonal
-contrario; si bota fuera del cuadro, es larga o no llega, es falta.
-(Regla de pádel asumida por el flujo del original y fijada en la
-cabecera de reglas de `Match.ts`; `tests/shots.test.ts` para `isInServeBox`.)
+2.5 **(b) DECISIÓN PROPIA** — El saque debe botar en el cuadro
+diagonal contrario; si bota fuera del cuadro, es larga o no llega, es
+falta. Es la regla real de pádel, **asumida** por la réplica: su
+tratamiento exacto en el original no consta en la SPEC, así que se
+documenta como decisión propia, no como observado. (Fijada en la
+cabecera de reglas de `Match.ts`; `tests/shots.test.ts` para
+`isInServeBox`.) *[Reetiquetado en la Ronda 2: figuraba como (a)
+OBSERVADO pero su propia justificación decía «asumida».]*
 
 2.6 **(b) DECISIÓN PROPIA** — El resto no puede volear el saque antes
 de que bote. Regla real de pádel; su tratamiento exacto en el original
@@ -105,10 +114,16 @@ cerramiento antes de cruzar es falta. (Cabecera de `Match.ts`.)
 ## 4. Jugadores e IA
 
 4.1 **(a) OBSERVADO** — Tres niveles (Fácil/Medio/Difícil) para el
-jugador (velocidad 5,2/6,4/7,6 m/s y suelo de calidad 0,35/0,5/0,65) y
-para la IA (reacción 0,5/0,3/0,16 s; error 0,24/0,12/0,05; error extra
-tras pared +0,10; velocidad 5/6,1/7 m/s). (SPEC §5.1;
-`tests/ai.test.ts`, `tests/modes.test.ts` en su caso.)
+jugador (velocidad 6,4/7,2/7,9 m/s y suelo de calidad 0,28/0,35/0,45)
+y para la IA (reacción 0,5/0,3/0,16 s; error 0,24/0,12/0,05; error
+extra tras pared +0,25/+0,15/+0,07 — se suma al error base cuando el
+golpe viene de rebote en pared —; velocidad 5/6,1/7 m/s). (SPEC §5.1;
+código: `src/state/modes.ts`, `PLAYER_LEVELS.speed/.qualityFloor` y
+`AI_LEVELS.aiReaction/.aiError/.aiWallError/.aiSpeed`, con la suma en
+`AI.ts` `AIBrain.rollError`; `tests/ai.test.ts`, `tests/modes.test.ts`
+en su caso.) *[Cifras corregidas en la Ronda 2: el reglamento decía
+velocidad 5,2/6,4/7,6, suelo 0,35/0,5/0,65 y error tras pared +0,10,
+que no coincidían ni con el código ni con la SPEC.]*
 
 4.2 **(b) DECISIÓN PROPIA** — *Cuándo* puede golpear la IA: solo tras
 cumplir su tiempo de reacción (`aiReaction`) desde el golpe contrario.

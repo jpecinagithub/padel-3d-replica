@@ -160,7 +160,7 @@ export function CourtView({
         <div className="hud-chips">
           {match ? (
             <>
-              <span className="hud-chip">{modeTitle} · v1.1.0</span>
+              <span className="hud-chip">{modeTitle} · v1.1.1</span>
               <span className="hud-chip hud-chip-opt">Saca: {SERVER_LABEL[match.match.server]}</span>
               <span className="hud-chip hud-chip-opt">
                 IA {aiLevelName}: {AI_STATE_LABEL[match.ai.state]}
@@ -311,7 +311,7 @@ export function CourtView({
         </div>
         <p className="hud-label">
           {match
-            ? `${modeTitle} · v1.1.0 — marcador oficial (15/30/40, juegos y set), audio sintetizado y táctil${
+            ? `${modeTitle} · v1.1.1 — marcador oficial (15/30/40, juegos y set), audio sintetizado y táctil${
                 settings.doubles ? ' · dobles' : ''
               }; las monedas se abonan al cerrar el partido`
             : 'Entrenamiento · Fase 3 — saque con aguja y rally libre sin marcador'}

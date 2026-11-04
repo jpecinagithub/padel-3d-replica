@@ -8,7 +8,7 @@ fórmulas, catálogos) y código propio. Todo el 3D es procedural, todo
 el audio se sintetiza con WebAudio y no hay ni un solo fichero de
 assets externos.
 
-**URL de producción: pendiente de despliegue (Fase 7)**
+**URL de producción: https://padel-3d-replica.vercel.app**
 
 ## Estado: v1.0.0 — juego completo (fases 0-6) + pulido (Fase 7)
 
